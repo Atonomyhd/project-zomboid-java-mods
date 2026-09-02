@@ -19,6 +19,8 @@ import zombie.network.PZNetKahluaTableImpl;
 import zombie.network.fields.ContainerID;
 import zombie.network.fields.NetObject;
 import zombie.scripting.entity.components.crafting.CraftRecipe;
+import zombie.vehicles.BaseVehicle;
+import zombie.vehicles.VehiclePart;
 
 /**
  * Routes player activity into three files by what an investigation greps for, not by packet type.
@@ -265,9 +267,15 @@ public class ItemEventHandler {
                                 .formatted(
                                         action.getString("origSpriteName"),
                                         action.getString("mode"))
-                        + describeWorldObject(action.rawget("object"));
+                        + describeSquare(action.rawget("square"))
+                        + describeWorldObject(action.rawget("object"))
+                        + describeItem("item", action.rawget("item"));
             case "ISDestroyStuffAction":
                 return describeWorldObject(action.rawget("item"));
+            case "ISRemoveBrokenGlass":
+            case "ISSmashWindow":
+            case "ISRemoveGlass":
+                return describeWorldObject(action.rawget("window"));
             case "ISDismantleAction":
                 return describeWorldObject(action.rawget("thumpable"));
             case "LSIWScrap":
@@ -293,17 +301,53 @@ public class ItemEventHandler {
                 }
                 return "";
             default:
+                if (VEHICLE_ACTIONS.contains(actionType)) {
+                    return describeVehicleAction(action);
+                }
                 return "";
         }
     }
 
+    /** Several vehicle actions take only the character, so the vehicle comes off the driver. */
+    private static String describeVehicleAction(StormKahluaTable action) {
+        String description = "";
+        if (action.rawget("part") instanceof VehiclePart part) {
+            description += ", part=%s".formatted(part.getId());
+        }
+        Object vehicle = action.rawget("vehicle");
+        if (!(vehicle instanceof BaseVehicle)
+                && action.rawget("character") instanceof IsoPlayer player) {
+            vehicle = player.getVehicle();
+        }
+        if (vehicle instanceof BaseVehicle baseVehicle) {
+            description +=
+                    ", vehicleId=%d, vehicleName=%s"
+                            .formatted(baseVehicle.getId(), baseVehicle.getScriptName());
+        }
+        return description + describeItem("item", action.rawget("item"));
+    }
+
     /** With a null label the item's class name is the key, matching the historical format. */
     private static String describeItem(String label, Object value) {
+        if (isNil(value)) {
+            return "";
+        }
         if (value instanceof InventoryItem item) {
             String key = label != null ? label : item.getClass().getSimpleName();
             return ", %s=%s".formatted(key, item.getFullType());
         }
         return label != null ? ", %s=%s".formatted(label, value) : ", item=%s".formatted(value);
+    }
+
+    private static boolean isNil(Object value) {
+        return value == null || value instanceof PZNetKahluaNull;
+    }
+
+    private static String describeSquare(Object value) {
+        if (!(value instanceof IsoGridSquare square)) {
+            return "";
+        }
+        return ", actionPos=(%d,%d,%d)".formatted(square.getX(), square.getY(), square.getZ());
     }
 
     private static String describeArgs(PZNetKahluaTableImpl args) {
@@ -345,11 +389,16 @@ public class ItemEventHandler {
      * the player position alone can't say what was removed or from which square.
      */
     private static String describeWorldObject(Object target) {
+        if (isNil(target)) {
+            return "";
+        }
         if (!(target instanceof IsoObject object)) {
             return ", object=%s".formatted(target);
         }
-        String description =
-                ", object=%s, objectName=%s".formatted(object.getSpriteName(), object.getName());
+        String description = ", object=%s".formatted(object.getSpriteName());
+        if (object.getName() != null) {
+            description += ", objectName=%s".formatted(object.getName());
+        }
         IsoGridSquare square = object.getSquare();
         if (square != null) {
             description +=
