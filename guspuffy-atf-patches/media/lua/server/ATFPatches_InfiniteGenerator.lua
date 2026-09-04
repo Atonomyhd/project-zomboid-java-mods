@@ -11,17 +11,24 @@ main thread) swaps it for a real IsoGenerator. Converted squares are
 remembered in global ModData so the top-up loop survives restarts; on reload
 the map save restores the object as an IsoGenerator directly.
 
+Adoption: dropping the item from hands (ISDropWorldItemAction,
+ISDropVehicleItemAction, ISTransferAction to the floor) goes through
+IsoGridSquare.AddWorldInventoryItem, which builds the IsoGenerator directly
+and never fires OnObjectAdded — the generator lands unregistered and burns
+its carried tank. Those three server-side completes are wrapped below to
+register whatever infinite generator they leave on the drop square.
+
 Silence: the tile's GeneratorSound = ATFSilentGenerator prefix makes every
 client-side Loop/Starting/Stopping/Backfire play a no-op (unknown sound), and
 the item's SoundRadius/SoundVolume = 1 shrinks the server's repeating
 WorldSound (zombie attraction) to a single tile.
 
 Protection is the Survivor Skill Obelisk guard (SurvivorSkillObeliskDestroyGuard)
-ported for this sprite: sledgehammer destroy and furniture pickup/disassemble
-are synced timed actions whose complete() runs on the SERVER in B42, removing
-the object with direct Java calls — no removal packet, so overriding
-complete() here is the gate. Only a role with the brush-tool capability may
-remove one. A non-admin who tries to destroy it is killed SERVER-side: B42
+ported for this sprite: sledgehammer destroy, furniture pickup/disassemble,
+the vanilla "Take generator" context action and unplugging are synced timed
+actions whose complete() runs on the SERVER in B42, removing the object with
+direct Java calls — no removal packet, so overriding complete() here is the
+gate. Only a role with the brush-tool capability may remove or unplug one. A non-admin who tries to destroy it is killed SERVER-side: B42
 player health is server-authoritative, a client-side Kill only plays the
 death screen and leaves the server character alive (see the obelisk's
 ObeliskCurseHandler for the full history).
@@ -83,6 +90,38 @@ local function smite(character)
     end
 end
 
+local function topUp(gen)
+    if not gen:isConnected() then
+        gen:setConnected(true)
+    end
+    if gen:getCondition() < MAX_CONDITION then
+        gen:setCondition(MAX_CONDITION)
+    end
+    if gen:getFuel() < MAX_FUEL then
+        gen:setFuel(MAX_FUEL)
+    end
+    if not gen:isActivated() then
+        gen:setActivated(true)
+    end
+end
+
+function Gen.adoptOnSquare(square)
+    if not square then
+        return
+    end
+    local gen = square:getGenerator()
+    if not gen or not isInfiniteGenSprite(gen) then
+        return
+    end
+    local key = squareKey(square)
+    if registry()[key] then
+        return
+    end
+    registry()[key] = true
+    topUp(gen)
+    print("[ATFPatches] Infinite generator adopted at " .. key)
+end
+
 function Gen.onObjectAdded(obj)
     if instanceof(obj, "IsoGenerator") then
         if isInfiniteGenSprite(obj) and obj:getSquare() then
@@ -132,15 +171,7 @@ function Gen.everyTenMinutes()
         if square then
             local gen = square:getGenerator()
             if gen and isInfiniteGenSprite(gen) then
-                if gen:getCondition() < MAX_CONDITION then
-                    gen:setCondition(MAX_CONDITION)
-                end
-                if gen:getFuel() < MAX_FUEL then
-                    gen:setFuel(MAX_FUEL)
-                end
-                if not gen:isActivated() then
-                    gen:setActivated(true)
-                end
+                topUp(gen)
             else
                 dead = dead or {}
                 table.insert(dead, k)
@@ -187,6 +218,57 @@ function ISMoveablesAction:complete()
         end
     end
     return Gen.origMoveComplete(self)
+end
+
+Gen.origTakeComplete = Gen.origTakeComplete or ISTakeGenerator.complete
+function ISTakeGenerator:complete()
+    if isInfiniteGenSprite(self.generator) and not isRemovalAllowed(self.character) then
+        return true
+    end
+    return Gen.origTakeComplete(self)
+end
+
+Gen.origPlugComplete = Gen.origPlugComplete or ISPlugGenerator.complete
+function ISPlugGenerator:complete()
+    if isInfiniteGenSprite(self.generator) and not isRemovalAllowed(self.character) then
+        return true
+    end
+    return Gen.origPlugComplete(self)
+end
+
+local function isInfiniteGenItem(item)
+    return item ~= nil and item:getFullType() == ITEM_FULL_TYPE
+end
+
+Gen.origDropWorldComplete = Gen.origDropWorldComplete or ISDropWorldItemAction.complete
+function ISDropWorldItemAction:complete()
+    local adopt = isInfiniteGenItem(self.item)
+    local result = Gen.origDropWorldComplete(self)
+    if adopt then
+        Gen.adoptOnSquare(self.sq)
+    end
+    return result
+end
+
+Gen.origDropVehicleComplete = Gen.origDropVehicleComplete or ISDropVehicleItemAction.complete
+function ISDropVehicleItemAction:complete()
+    local adopt = isInfiniteGenItem(self.item)
+    local result = Gen.origDropVehicleComplete(self)
+    if adopt then
+        Gen.adoptOnSquare(self.dropSquare)
+    end
+    return result
+end
+
+Gen.origTransferItem = Gen.origTransferItem or ISTransferAction.transferItem
+function ISTransferAction:transferItem(character, item, srcContainer, destContainer, dropSquare)
+    local adopt = isInfiniteGenItem(item) and dropSquare ~= nil
+    local result =
+        Gen.origTransferItem(self, character, item, srcContainer, destContainer, dropSquare)
+    if adopt then
+        Gen.adoptOnSquare(dropSquare)
+    end
+    return result
 end
 
 -- Trampoline pattern: register once, dispatch through the global table so a

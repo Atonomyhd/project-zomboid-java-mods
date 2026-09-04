@@ -71,7 +71,7 @@ A collection of performance and compatibility patches specific to the After the 
 [b][url=https://discord.gg/after-the-fall]After The Fall[/url][/b]: the #1 multiplayer server in the world
 
 Tested and compatible with 42.20.2'''
-	modVersion = '1.6.0'
+	modVersion = '1.6.1'
 	pack = 'atf_generators'
 	tiledef = 'atf_generators 8104'
 }
