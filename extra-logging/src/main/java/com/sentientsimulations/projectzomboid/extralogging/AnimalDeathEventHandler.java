@@ -11,6 +11,7 @@ import zombie.characters.IsoGameCharacter;
 import zombie.characters.IsoPlayer;
 import zombie.characters.IsoZombie;
 import zombie.characters.animals.IsoAnimal;
+import zombie.characters.animals.behavior.BaseAnimalBehavior;
 import zombie.characters.animals.datas.AnimalBreed;
 import zombie.characters.animals.datas.AnimalData;
 import zombie.iso.IsoGridSquare;
@@ -31,6 +32,11 @@ public class AnimalDeathEventHandler {
 
     /** Hunger/thirst above this drains health in {@code AnimalData.updateHealth}. */
     private static final float NEGLECT_THRESHOLD = 0.8F;
+
+    /** Age fraction at which {@code AnimalData.checkOld} starts draining health. */
+    private static final float OLD_AGE_THRESHOLD = 0.95F;
+
+    private static final String DIE_AT_BIRTH_DISORDER = "dieatbirth";
 
     private static final long GAME_MILLIS_PER_HOUR = 3600000L;
 
@@ -84,6 +90,17 @@ public class AnimalDeathEventHandler {
         log.setRoadKill(animal.isRoadKill());
         log.setOnFire(animal.isOnFire());
         log.setOnHook(animal.isOnHook());
+        BaseAnimalBehavior behavior = animal.getBehavior();
+        if (behavior != null) {
+            log.setWildAndHurt(behavior.isWildAndHurt());
+        }
+        if (data != null) {
+            log.setGeriatricPercentage(data.getGeriatricPercentage());
+            if (data.canHaveMilk()) {
+                log.setMilkQuantity(data.getMilkQuantity());
+                log.setMaxMilk(data.getMaxMilk());
+            }
+        }
 
         IsoHutch hutch = animal.getHutch();
         if (hutch != null) {
@@ -111,9 +128,9 @@ public class AnimalDeathEventHandler {
 
     private static void appendDeathCause(AnimalDeathLog log, IsoAnimal animal) {
         IsoGameCharacter attacker = animal.getAttackedBy();
-        if (attacker != null) {
-            log.setGameHoursSinceLastAttack(gameHoursSinceLastAttack(animal));
-        }
+        AnimalData data = animal.getData();
+        Double hoursSinceAttack = gameHoursSinceLastAttack(animal);
+        log.setGameHoursSinceLastAttack(hoursSinceAttack);
 
         // IsoAnimal extends IsoPlayer, so animals must be tested before players.
         if (attacker instanceof IsoAnimal killerAnimal) {
@@ -141,11 +158,25 @@ public class AnimalDeathEventHandler {
             // deaths arrive at <= 0.
             log.setDeathCause("MetaPredator");
             log.setKillerType("MetaPredator");
+        } else if (hoursSinceAttack != null) {
+            // The only hit that leaves attackedTimer set with no attacker is the outside-hutch
+            // meta predator (hitConsequences with a null wielder); flee logic clears both together.
+            log.setDeathCause("MetaPredator");
+            log.setKillerType("MetaPredator");
+        } else if (animal.geneticDisorder.contains(DIE_AT_BIRTH_DISORDER)) {
+            log.setDeathCause("DiedAtBirth");
+        } else if (animal.isWild() && Boolean.TRUE.equals(log.getWildAndHurt())) {
+            // Wounded wild animals flee, drop the attacker, and die when the drop-dead timer runs
+            // out.
+            log.setDeathCause("WildWounded");
+        } else if (data != null && data.reduceHealthDueToMilk()) {
+            log.setDeathCause("MilkOverfill");
         } else if (animal.getHunger() > NEGLECT_THRESHOLD) {
             log.setDeathCause("Starvation");
         } else if (animal.getThirst() > NEGLECT_THRESHOLD) {
             log.setDeathCause("Dehydration");
-        } else if (animal.isGeriatric()) {
+        } else if (animal.isGeriatric()
+                || (data != null && data.getGeriatricPercentage() >= OLD_AGE_THRESHOLD)) {
             log.setDeathCause("OldAge");
         } else if (animal.getHutch() != null) {
             // Health drained inside the hutch without hunger/thirst/age standing out — dirt decay.
@@ -210,6 +241,20 @@ public class AnimalDeathEventHandler {
         field(sb, "Thirst", format(log.getThirst()));
         field(sb, "Stress", format(log.getStress()));
         field(sb, "Hours Survived", String.format("%.1f", log.getHoursSurvived()));
+        field(sb, "Age Fraction", format(log.getGeriatricPercentage()));
+        if (log.getMilkQuantity() != null) {
+            field(
+                    sb,
+                    "Milk",
+                    String.format(
+                            "%s / %s", format(log.getMilkQuantity()), format(log.getMaxMilk())));
+        }
+        if (log.getGameHoursSinceLastAttack() != null) {
+            field(
+                    sb,
+                    "Last Attack",
+                    String.format("%.1f game hours ago", log.getGameHoursSinceLastAttack()));
+        }
 
         sb.append("\n--- Home ---\n");
         if (log.getHutchX() != null) {

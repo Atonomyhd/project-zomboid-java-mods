@@ -38,6 +38,10 @@ public class AnimalDeathLog {
     private Boolean roadKill;
     private Boolean onFire;
     private Boolean onHook;
+    private Boolean wildAndHurt;
+    private Float geriatricPercentage;
+    private Float milkQuantity;
+    private Float maxMilk;
 
     private Integer hutchX;
     private Integer hutchY;
