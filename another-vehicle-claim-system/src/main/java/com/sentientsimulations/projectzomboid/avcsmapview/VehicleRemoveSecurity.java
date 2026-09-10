@@ -43,6 +43,18 @@ public final class VehicleRemoveSecurity {
             return false;
         }
         if (AvcsClaimPermissions.isPermitted(p, owner)) {
+            LOGGER.info(
+                    "[AVCS] ALLOWED vehicle.remove from {} on claimed vehicle (owner={}, id={},"
+                            + " sqlId={}, script={}, pos=({},{},{}), admin={})",
+                    p.getUsername(),
+                    owner,
+                    vehicle.getId(),
+                    vehicle.sqlId,
+                    vehicle.getScriptName(),
+                    vehicle.getX(),
+                    vehicle.getY(),
+                    vehicle.getZ(),
+                    p.isAccessLevel("admin"));
             return false;
         }
 

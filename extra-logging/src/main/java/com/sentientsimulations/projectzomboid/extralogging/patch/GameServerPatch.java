@@ -2,6 +2,7 @@ package com.sentientsimulations.projectzomboid.extralogging.patch;
 
 import static io.pzstorm.storm.logging.StormLogger.LOGGER;
 
+import com.sentientsimulations.projectzomboid.extralogging.VehicleRemovalContext;
 import io.pzstorm.storm.core.StormClassTransformer;
 import io.pzstorm.storm.event.core.StormEventDispatcher;
 import io.pzstorm.storm.event.lua.OnPlayerDisconnectedEvent;
@@ -12,10 +13,14 @@ import net.bytebuddy.dynamic.DynamicType;
 import net.bytebuddy.matcher.ElementMatchers;
 import net.bytebuddy.pool.TypePool;
 import zombie.characters.IsoPlayer;
+import zombie.core.network.ByteBufferReader;
 import zombie.core.raknet.UdpConnection;
 import zombie.network.IConnection;
 
-/** Patches {@link zombie.network.GameServer} to log and dispatch player connection events. */
+/**
+ * Patches {@link zombie.network.GameServer} to log and dispatch player connection events, and to
+ * scope each client command so vehicle removals inside it can be attributed to the sender.
+ */
 public class GameServerPatch extends StormClassTransformer {
 
     public GameServerPatch() {
@@ -30,7 +35,25 @@ public class GameServerPatch extends StormClassTransformer {
                                 .on(ElementMatchers.named("receivePlayerConnect")))
                 .visit(
                         Advice.to(DisconnectPlayerAdvice.class)
-                                .on(ElementMatchers.named("disconnectPlayer")));
+                                .on(ElementMatchers.named("disconnectPlayer")))
+                .visit(
+                        Advice.to(ReceiveClientCommandAdvice.class)
+                                .on(ElementMatchers.named("receiveClientCommand")));
+    }
+
+    public static class ReceiveClientCommandAdvice {
+
+        @Advice.OnMethodEnter(suppress = Throwable.class)
+        public static void onEnter(
+                @Advice.Argument(0) ByteBufferReader bb,
+                @Advice.Argument(1) UdpConnection connection) {
+            VehicleRemovalContext.enterClientCommand(connection, bb.bb);
+        }
+
+        @Advice.OnMethodExit(onThrowable = Throwable.class, suppress = Throwable.class)
+        public static void onExit() {
+            VehicleRemovalContext.exit();
+        }
     }
 
     public static class ReceivePlayerConnectAdvice {
