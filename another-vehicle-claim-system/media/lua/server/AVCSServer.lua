@@ -321,7 +321,7 @@ AVCS.onClientCommand = function(moduleName, command, playerObj, arg)
     elseif moduleName == "AVCS" and command == "unclaimVehicle" then
         -- Game send everything as table...
         -- So we do arg[1] to get SQL ID
-        local checkResult = AVCS.checkPermission(playerObj, arg[1])
+        local checkResult = AVCS.checkManagementPermission(playerObj, arg[1])
 
         if type(checkResult) == "boolean" then
             if checkResult == false then
@@ -382,7 +382,7 @@ AVCS.onClientCommand = function(moduleName, command, playerObj, arg)
         -- arg should be table of a lot of things
         -- VehicleID
         -- Permission types like AllowDrive, AllowPassenger
-        local checkResult = AVCS.checkPermission(playerObj, arg.VehicleID)
+        local checkResult = AVCS.checkManagementPermission(playerObj, arg.VehicleID)
 
         if type(checkResult) == "boolean" then
             if checkResult == false then
