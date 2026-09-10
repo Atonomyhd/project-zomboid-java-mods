@@ -176,6 +176,23 @@ function AVCS.onAdminTeleportVehicleResult(arg)
     getPlayer():setHaloNote(msg, 250, 250, 250, 300)
 end
 
+-- Admin-only (server re-checks the role): break a claimed vehicle's tow constraint
+function AVCS.requestAdminUntowVehicle(vehicleID)
+    sendClientCommand(getPlayer(), "AVCS", "adminUntowVehicle", {
+        VehicleID = vehicleID,
+    })
+end
+
+function AVCS.onAdminUntowVehicleResult(arg)
+    if type(arg) ~= "table" then
+        return
+    end
+    local reason = arg.reason or "badArgs"
+    local msg = getTextOrNull("IGUI_AVCS_Admin_Untow_" .. reason)
+        or getText("IGUI_AVCS_Admin_Untow_badArgs")
+    getPlayer():setHaloNote(msg, 250, 250, 250, 300)
+end
+
 AVCS.OnServerCommand = function(moduleName, command, arg)
     if moduleName ~= "AVCS" then
         return
@@ -203,6 +220,8 @@ AVCS.OnServerCommand = function(moduleName, command, arg)
         AVCS.registerClientVehicleSQLID(arg)
     elseif command == "adminTeleportVehicleResult" then
         AVCS.onAdminTeleportVehicleResult(arg)
+    elseif command == "adminUntowVehicleResult" then
+        AVCS.onAdminUntowVehicleResult(arg)
     elseif command == "damageBlocked" then
         getPlayer():setHaloNote(getText("IGUI_AVCS_Vehicle_No_Permission"), 250, 250, 250, 300)
     elseif command == "enterBlocked" then
