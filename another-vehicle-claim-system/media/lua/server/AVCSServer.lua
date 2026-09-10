@@ -313,6 +313,103 @@ function AVCS.sendFullSync(playerObj)
     sendServerCommand(playerObj, "AVCS", "fullSyncPlayerDB", AVCS.dbByPlayerID)
 end
 
+-- ============================================================
+-- Admin Untow: pure Lua, no Storm/Java dependency
+-- ============================================================
+
+-- Finds a currently loaded vehicle by its AVCS claim key (ModData SQLID).
+-- Tow constraints only ever exist between two loaded vehicles, so unlike
+-- teleport there's no "load the area first" case to handle here.
+function AVCS.findLoadedVehicleBySQLID(vehicleID)
+    local cell = getCell()
+    if not cell then
+        return nil
+    end
+
+    local vehicles = cell:getVehicles()
+    if not vehicles then
+        return nil
+    end
+
+    local it = vehicles:iterator()
+    while it:hasNext() do
+        local v = it:next()
+        if v and v:getModData().SQLID == vehicleID then
+            return v
+        end
+    end
+
+    return nil
+end
+
+-- Best-effort tow-state check, wrapped in pcall in case the getter names
+-- change in a future build; falls back to allowing the detach attempt.
+function AVCS.vehicleHasTowLink(vehicleObj)
+    local ok1, towing = pcall(function()
+        return vehicleObj:getVehicleTowing()
+    end)
+    local ok2, towedBy = pcall(function()
+        return vehicleObj:getVehicleTowedBy()
+    end)
+    if (ok1 and towing ~= nil) or (ok2 and towedBy ~= nil) then
+        return true
+    end
+    -- Both getters failed, assume it might be towing rather than block the admin
+    return not ok1 and not ok2
+end
+
+function AVCS.adminUntowVehicle(playerObj, vehicleID)
+    local function reply(ok, reason)
+        sendServerCommand(
+            playerObj,
+            "AVCS",
+            "adminUntowVehicleResult",
+            { ok = ok, reason = reason, VehicleID = vehicleID }
+        )
+    end
+
+    if not playerObj or string.lower(playerObj:getAccessLevel()) ~= "admin" then
+        reply(false, "notAdmin")
+        return
+    end
+
+    if type(vehicleID) ~= "number" then
+        reply(false, "badArgs")
+        return
+    end
+
+    local vehicleObj = AVCS.findLoadedVehicleBySQLID(vehicleID)
+    if not vehicleObj then
+        reply(false, "notLoaded")
+        return
+    end
+
+    if not AVCS.vehicleHasTowLink(vehicleObj) then
+        reply(false, "notTowing")
+        return
+    end
+
+    -- Same call vanilla's own detachTrailer command uses (VehicleCommands.lua)
+    vehicleObj:breakConstraint(true, false)
+
+    writeLog(
+        "AVCS",
+        "["
+            .. getTimestamp()
+            .. "] Admin untow: ["
+            .. playerObj:getUsername()
+            .. "] ["
+            .. vehicleObj:getScript():getFullName()
+            .. "] ["
+            .. math.floor(vehicleObj:getX())
+            .. ","
+            .. math.floor(vehicleObj:getY())
+            .. "]"
+    )
+
+    reply(true, "untowed")
+end
+
 AVCS.onClientCommand = function(moduleName, command, playerObj, arg)
     if moduleName == "AVCS" and command == "requestFullSync" then
         AVCS.sendFullSync(playerObj)
@@ -434,6 +531,9 @@ AVCS.onClientCommand = function(moduleName, command, playerObj, arg)
                 { ok = false, reason = "noStorm", VehicleID = arg and arg.VehicleID or nil }
             )
         end
+    elseif moduleName == "AVCS" and command == "adminUntowVehicle" then
+        -- Pure Lua, no Storm/Java needed: only ever targets an already-loaded vehicle
+        AVCS.adminUntowVehicle(playerObj, type(arg) == "table" and arg.VehicleID or nil)
     elseif moduleName == "AVCS" and command == "rebuildDB" then
         if playerObj:getAccessLevel() == "admin" then
             AVCS.rebuildDB()
