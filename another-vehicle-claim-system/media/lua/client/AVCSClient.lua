@@ -205,6 +205,9 @@ AVCS.OnServerCommand = function(moduleName, command, arg)
         AVCS.onAdminTeleportVehicleResult(arg)
     elseif command == "damageBlocked" then
         getPlayer():setHaloNote(getText("IGUI_AVCS_Vehicle_No_Permission"), 250, 250, 250, 300)
+    elseif command == "containerBlocked" then
+        getPlayer():setHaloNote(getText("IGUI_AVCS_Vehicle_No_Permission"), 250, 250, 250, 300)
+        ISInventoryPage.dirtyUI()
     elseif command == "enterBlocked" then
         -- The server refused our seat; we entered it predictively, so back out of it
         local playerObj = getPlayer()
