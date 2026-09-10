@@ -12,6 +12,8 @@ import io.pzstorm.storm.event.lua.OnAnimalDeathEvent;
 import io.pzstorm.storm.event.lua.OnPlayerDeathEvent;
 import io.pzstorm.storm.event.packet.*;
 import io.pzstorm.storm.event.zomboid.OnItemTransferCompletedEvent;
+import io.pzstorm.storm.event.zomboid.OnPlayerEnterWorldEvent;
+import io.pzstorm.storm.event.zomboid.OnPlayerLeaveWorldEvent;
 import io.pzstorm.storm.mod.ZomboidMod;
 import io.pzstorm.storm.util.StormEnv;
 import java.util.ArrayList;
@@ -44,6 +46,18 @@ public class ExtraLoggingMod implements ZomboidMod {
         transformers.add(new VehiclesDB2Patch());
 
         return transformers;
+    }
+
+    // Player connection events
+
+    @SubscribeEvent
+    public void onPlayerEnterWorld(OnPlayerEnterWorldEvent event) {
+        PlayerConnectionEventHandler.onPlayerEnterWorld(event);
+    }
+
+    @SubscribeEvent
+    public void onPlayerLeaveWorld(OnPlayerLeaveWorldEvent event) {
+        PlayerConnectionEventHandler.onPlayerLeaveWorld(event);
     }
 
     // Death events
