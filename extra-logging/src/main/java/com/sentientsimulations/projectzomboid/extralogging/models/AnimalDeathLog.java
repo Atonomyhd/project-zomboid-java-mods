@@ -52,4 +52,11 @@ public class AnimalDeathLog {
     private Double zoneId;
 
     private List<String> geneticDisorders;
+
+    private String fatalDropSite;
+    private String fatalDropPath;
+    private Float fatalDropHealthBefore;
+    private Float fatalDropHunger;
+    private Float fatalDropThirst;
+    private Boolean fatalDropDuringMetaCatchUp;
 }

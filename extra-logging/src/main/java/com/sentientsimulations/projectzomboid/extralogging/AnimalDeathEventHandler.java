@@ -3,6 +3,7 @@ package com.sentientsimulations.projectzomboid.extralogging;
 import static io.pzstorm.storm.logging.StormLogger.LOGGER;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.sentientsimulations.projectzomboid.extralogging.animal.AnimalFatalHealthDrop;
 import com.sentientsimulations.projectzomboid.extralogging.models.AnimalDeathLog;
 import java.util.ArrayList;
 import java.util.StringJoiner;
@@ -131,6 +132,8 @@ public class AnimalDeathEventHandler {
         AnimalData data = animal.getData();
         Double hoursSinceAttack = gameHoursSinceLastAttack(animal);
         log.setGameHoursSinceLastAttack(hoursSinceAttack);
+        AnimalFatalHealthDrop.Record drop = AnimalFatalHealthDrop.get(animal);
+        appendFatalDrop(log, drop);
 
         // IsoAnimal extends IsoPlayer, so animals must be tested before players.
         if (attacker instanceof IsoAnimal killerAnimal) {
@@ -158,6 +161,8 @@ public class AnimalDeathEventHandler {
             // deaths arrive at <= 0.
             log.setDeathCause("MetaPredator");
             log.setKillerType("MetaPredator");
+        } else if (drop != null && classifyFatalDrop(log, animal, data, drop)) {
+            // Cause pinned by the call path that zeroed the health.
         } else if (hoursSinceAttack != null) {
             // The only hit that leaves attackedTimer set with no attacker is the outside-hutch
             // meta predator (hitConsequences with a null wielder); flee logic clears both together.
@@ -184,6 +189,75 @@ public class AnimalDeathEventHandler {
         } else {
             log.setDeathCause("Unknown");
         }
+    }
+
+    private static void appendFatalDrop(AnimalDeathLog log, AnimalFatalHealthDrop.Record drop) {
+        if (drop == null) {
+            return;
+        }
+        log.setFatalDropSite(drop.site());
+        log.setFatalDropPath(drop.path());
+        log.setFatalDropHealthBefore(drop.healthBefore());
+        log.setFatalDropHunger(drop.hunger());
+        log.setFatalDropThirst(drop.thirst());
+        log.setFatalDropDuringMetaCatchUp(drop.duringMetaCatchUp());
+    }
+
+    /**
+     * Maps the caller that zeroed the animal's health to a cause. Storm records the path at the
+     * {@code IsoAnimal.setHealth} seam, so this is ground truth for the attacker-less drains that
+     * the vitals at death time can no longer tell apart (meta catch-up feeds the animal after
+     * starving it; a ranch that spawns its stock dead never ran a stat tick at all). Returns false
+     * when the site is not one the vanilla source accounts for, leaving the vitals heuristics to
+     * decide.
+     */
+    private static boolean classifyFatalDrop(
+            AnimalDeathLog log,
+            IsoAnimal animal,
+            AnimalData data,
+            AnimalFatalHealthDrop.Record drop) {
+        String site = drop.site();
+        switch (site) {
+            case "RandomizedRanchBase.randomizeRanch" -> log.setDeathCause("SpawnedDead");
+            case "IsoAnimal.load" -> log.setDeathCause("LoadedDead");
+            case "IsoAnimal.copyFrom" -> log.setDeathCause("CorpseRematerialized");
+            case "AnimalData.updateMilk" -> log.setDeathCause("MilkOverfill");
+            case "AnimalData.checkOld" -> log.setDeathCause("OldAge");
+            case "AnimalData.updateHealth" -> {
+                if (animal.isGeriatric()) {
+                    log.setDeathCause("OldAge");
+                } else if (drop.hunger() >= drop.thirst()) {
+                    log.setDeathCause("Starvation");
+                } else {
+                    log.setDeathCause("Dehydration");
+                }
+            }
+            case "IsoAnimal.carCrash" -> log.setDeathCause("VehicleCrash");
+            case "IsoAnimal.Hit" -> log.setDeathCause("Vehicle");
+            case "IsoAnimal.HitByAnimal" -> {
+                log.setDeathCause("Animal");
+                log.setKillerType("Animal");
+            }
+            case "IsoAnimal.hitConsequences" -> {
+                // A hit with no attacker recorded is the outside-hutch meta predator.
+                log.setDeathCause("MetaPredator");
+                log.setKillerType("MetaPredator");
+            }
+            default -> {
+                if (site.startsWith("BaseAnimalBehavior.")) {
+                    log.setDeathCause("WildWounded");
+                } else if (isLuaDriven(drop.path())) {
+                    log.setDeathCause("LuaScript");
+                } else {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    private static boolean isLuaDriven(String path) {
+        return path.contains("Kahlua") || path.contains("LuaCaller") || path.contains("LuaManager");
     }
 
     private static Double gameHoursSinceLastAttack(IsoAnimal animal) {
@@ -254,6 +328,25 @@ public class AnimalDeathEventHandler {
                     sb,
                     "Last Attack",
                     String.format("%.1f game hours ago", log.getGameHoursSinceLastAttack()));
+        }
+
+        sb.append("\n--- Fatal Health Drop ---\n");
+        if (log.getFatalDropSite() == null) {
+            field(sb, "Site", "none recorded");
+        } else {
+            field(sb, "Site", log.getFatalDropSite());
+            field(sb, "Health Before", String.format("%.4f", log.getFatalDropHealthBefore()));
+            field(
+                    sb,
+                    "Hunger/Thirst",
+                    String.format(
+                            "%s / %s",
+                            format(log.getFatalDropHunger()), format(log.getFatalDropThirst())));
+            field(
+                    sb,
+                    "Meta Catch-up",
+                    Boolean.TRUE.equals(log.getFatalDropDuringMetaCatchUp()) ? "yes" : "no");
+            field(sb, "Path", log.getFatalDropPath());
         }
 
         sb.append("\n--- Home ---\n");

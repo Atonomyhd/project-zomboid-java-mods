@@ -44,6 +44,7 @@ public class ExtraLoggingMod implements ZomboidMod {
         transformers.add(new BaseVehiclePatch());
         transformers.add(new VehicleManagerPatch());
         transformers.add(new VehiclesDB2Patch());
+        transformers.add(new IsoAnimalPatch());
 
         return transformers;
     }
