@@ -17,6 +17,7 @@ import org.jetbrains.annotations.Nullable;
 import se.krka.kahlua.vm.KahluaTable;
 import zombie.Lua.LuaManager;
 import zombie.characters.IsoPlayer;
+import zombie.characters.Role;
 import zombie.core.logger.LoggerManager;
 import zombie.core.physics.Transform;
 import zombie.core.physics.WorldSimulation;
@@ -149,11 +150,13 @@ public final class AvcsAdminVehicleTeleport {
             return;
         }
         Object claimKey = event.getVehicleId();
-        if (!isAdminRole(admin.getAccessLevel())) {
+        Role role = admin.getRole();
+        String roleName = role == null ? "none" : role.getName();
+        if (!isAdminRole(roleName)) {
             LOGGER.warn(
                     "[AVCS] adminTeleportVehicle from non-admin {} (role={}); dropping",
                     admin.getUsername(),
-                    admin.getAccessLevel());
+                    roleName);
             reply(admin, claimKey, Reason.notAdmin, null);
             return;
         }

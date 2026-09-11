@@ -3,8 +3,8 @@ import org.gradle.api.services.BuildServiceParameters
 import org.gradle.internal.os.OperatingSystem
 
 plugins {
-	id 'com.diffplug.spotless' version '8.1.0'
-	id 'io.freefair.lombok' version '9.2.0' apply false
+	id 'com.diffplug.spotless' version '8.10.2'
+	id 'io.freefair.lombok' version '9.5.0' apply false
 }
 
 String stormVersion = '42.20.4_2.10.0'
@@ -163,7 +163,7 @@ interface ModInfo {
 	Property<Boolean> getRequiresStorm()
 }
 
-def getLocalProperty(String property, String defaultValue = null) {
+def getLocalProperty = { String property, String defaultValue = null ->
 	return providers.provider {
 		def props = new Properties()
 		def propFile = file("local.properties")
@@ -527,6 +527,7 @@ subprojects { subproj ->
 
 	test {
 		useJUnitPlatform()
+		jvmArgs '--enable-native-access=ALL-UNNAMED'
 		finalizedBy jacocoTestReport
 	}
 
