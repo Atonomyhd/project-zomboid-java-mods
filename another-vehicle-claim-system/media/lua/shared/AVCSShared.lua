@@ -247,20 +247,16 @@ end
 
 -- Management actions are limited to the vehicle owner and admins.
 function AVCS.checkManagementPermission(playerObj, vehicleObj)
-    if not playerObj or not AVCS.dbByVehicleSQLID then
+    if not playerObj or vehicleObj == nil or not AVCS.dbByVehicleSQLID then
         return false
     end
 
     local vehicleSQL = vehicleObj
     if type(vehicleObj) ~= "number" then
-        if not vehicleObj then
-            return false
-        end
-        vehicleSQL = AVCS.getVehicleID(vehicleObj)
+        return false
     end
 
-    local record = vehicleSQL and AVCS.dbByVehicleSQLID[vehicleSQL]
-    if not record then
+    if not vehicleSQL or not AVCS.dbByVehicleSQLID[vehicleSQL] then
         return false
     end
 
@@ -269,7 +265,7 @@ function AVCS.checkManagementPermission(playerObj, vehicleObj)
         return true
     end
 
-    return record.OwnerPlayerID == playerObj:getUsername()
+    return AVCS.dbByVehicleSQLID[vehicleSQL].OwnerPlayerID == playerObj:getUsername()
 end
 
 -- Which rule in checkPermission granted (or refused) access, for the audit log

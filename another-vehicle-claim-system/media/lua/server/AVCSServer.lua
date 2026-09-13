@@ -52,7 +52,13 @@ and so on
 -- vehicleID is vehicle object ID
 ---@param playerObj IsoPlayer
 function AVCS.claimVehicle(playerObj, vehicleID)
+    if not playerObj or type(vehicleID) ~= "table" or type(vehicleID.vehicle) ~= "number" then
+        return
+    end
     local vehicleObj = getVehicleById(vehicleID.vehicle)
+    if not vehicleObj then
+        return
+    end
     vehicleID = AVCS.getVehicleID(vehicleObj)
     -- If no ID, we create one
     if not vehicleID then
@@ -269,19 +275,50 @@ function AVCS.updateLastKnownLogonTime(playerObj)
 end
 
 function AVCS.updateSpecifyVehicleUserPermission(arg)
-    if AVCS.dbByVehicleSQLID[arg.VehicleID] then
-        for k, v in pairs(arg) do
-            if k ~= "VehicleID" then
-                if v then
-                    AVCS.dbByVehicleSQLID[arg.VehicleID][k] = v
-                else
-                    AVCS.dbByVehicleSQLID[arg.VehicleID][k] = nil
-                end
-            end
-        end
-        ModData.add("AVCSByVehicleSQLID", AVCS.dbByVehicleSQLID)
-        sendServerCommand("AVCS", "updateClientSpecifyVehicleUserPermission", arg)
+    if type(arg) ~= "table" or arg.VehicleID == nil or type(arg.VehicleID) ~= "number" then
+        return false
     end
+
+    local record = AVCS.dbByVehicleSQLID[arg.VehicleID]
+    if not record then
+        return false
+    end
+
+    local allowedFields = {
+        AllowDrive = true,
+        AllowPassenger = true,
+        AllowSiphonFuel = true,
+        AllowUninstallParts = true,
+        AllowAttachVehicle = true,
+        AllowDetechVehicle = true,
+        AllowTakeEngineParts = true,
+        AllowOpeningTrunk = true,
+        AllowInflatTires = true,
+        AllowDeflatTires = true,
+    }
+    for field in pairs(allowedFields) do
+        if arg[field] ~= nil and type(arg[field]) ~= "boolean" then
+            return false
+        end
+    end
+    local update = { VehicleID = arg.VehicleID }
+    for fieldName in pairs(allowedFields) do
+        if arg[fieldName] ~= nil then
+            if type(arg[fieldName]) ~= "boolean" then
+                return false
+            end
+            if arg[fieldName] then
+                record[fieldName] = true
+            else
+                record[fieldName] = nil
+            end
+            update[fieldName] = arg[fieldName]
+        end
+    end
+
+    ModData.add("AVCSByVehicleSQLID", AVCS.dbByVehicleSQLID)
+    sendServerCommand("AVCS", "updateClientSpecifyVehicleUserPermission", update)
+    return true
 end
 
 -- Database might become inconsistent with one another due to whatever reasons
@@ -289,16 +326,27 @@ end
 function AVCS.rebuildDB()
     local tempDB = {}
     for k, v in pairs(AVCS.dbByVehicleSQLID) do
-        if not tempDB[v.OwnerPlayerID] then
-            tempDB[v.OwnerPlayerID] = {}
-        end
-
-        tempDB[v.OwnerPlayerID][k] = true
-        if AVCS.dbByPlayerID[v.OwnerPlayerID].LastKnownLogonTime then
-            tempDB[v.OwnerPlayerID].LastKnownLogonTime =
-                AVCS.dbByPlayerID[v.OwnerPlayerID].LastKnownLogonTime
+        if type(v) ~= "table" or not v.OwnerPlayerID then
+            writeLog(
+                "AVCS",
+                "["
+                    .. getTimestamp()
+                    .. "] Warning: Skipping invalid vehicle claim ["
+                    .. tostring(k)
+                    .. "]"
+            )
         else
-            tempDB[v.OwnerPlayerID].LastKnownLogonTime = getTimestamp()
+            if not tempDB[v.OwnerPlayerID] then
+                tempDB[v.OwnerPlayerID] = {}
+            end
+
+            tempDB[v.OwnerPlayerID][k] = true
+            local previousPlayerData = AVCS.dbByPlayerID[v.OwnerPlayerID]
+            if previousPlayerData and previousPlayerData.LastKnownLogonTime then
+                tempDB[v.OwnerPlayerID].LastKnownLogonTime = previousPlayerData.LastKnownLogonTime
+            else
+                tempDB[v.OwnerPlayerID].LastKnownLogonTime = getTimestamp()
+            end
         end
     end
 
@@ -313,13 +361,6 @@ function AVCS.sendFullSync(playerObj)
     sendServerCommand(playerObj, "AVCS", "fullSyncPlayerDB", AVCS.dbByPlayerID)
 end
 
--- ============================================================
--- Admin Untow: pure Lua, no Storm/Java dependency
--- ============================================================
-
--- Finds a currently loaded vehicle by its AVCS claim key (ModData SQLID).
--- Tow constraints only ever exist between two loaded vehicles, so unlike
--- teleport there's no "load the area first" case to handle here.
 function AVCS.findLoadedVehicleBySQLID(vehicleID)
     local cell = getCell()
     if not cell then
@@ -368,7 +409,7 @@ function AVCS.adminUntowVehicle(playerObj, vehicleID)
         )
     end
 
-    if not playerObj or string.lower(playerObj:getAccessLevel()) ~= "admin" then
+    if not playerObj or string.lower(playerObj:getAccessLevel() or "") ~= "admin" then
         reply(false, "notAdmin")
         return
     end
@@ -416,111 +457,27 @@ AVCS.onClientCommand = function(moduleName, command, playerObj, arg)
     elseif moduleName == "AVCS" and command == "claimVehicle" then
         AVCS.claimVehicle(playerObj, arg)
     elseif moduleName == "AVCS" and command == "unclaimVehicle" then
-        -- Game send everything as table...
-        -- So we do arg[1] to get SQL ID
-        local checkResult = AVCS.checkManagementPermission(playerObj, arg[1])
-
-        if type(checkResult) == "boolean" then
-            if checkResult == false then
-                -- Using vanilla logging function, write to a log with suffix AVCS
-                -- Datetime, Unix Time, Warning message, offender username, vehicle full name, coordinate
-                -- [26-03-23 22:23:36.671] [1679840616] Warning: Attempting to unclaim without permission [Username] [Base.ExtremeCar] [13026,1215]
-                writeLog(
-                    "AVCS",
-                    "["
-                        .. getTimestamp()
-                        .. "] Warning: Attempting to unclaim without permission ["
-                        .. playerObj:getUsername()
-                        .. "] ["
-                        .. AVCS.dbByVehicleSQLID[arg[1]].CarModel
-                        .. "] ["
-                        .. AVCS.dbByVehicleSQLID[arg[1]].LastLocationX
-                        .. ","
-                        .. AVCS.dbByVehicleSQLID[arg[1]].LastLocationY
-                        .. "]"
-                )
-
-                -- Possible desync has occurred, force sync the user
-                sendServerCommand(playerObj, "AVCS", "requestFullResync", {})
-                return
-            end
-        elseif checkResult.permissions == false then
-            -- Using vanilla logging function, write to a log with suffix AVCS
-            -- Datetime, Unix Time, Warning message, offender username, vehicle full name, coordinate
-            -- [26-03-23 22:23:36.671] [1679840616] Warning: Attempting to unclaim without permission [Username] [Base.ExtremeCar] [13026,1215]
-            writeLog(
-                "AVCS",
-                "["
-                    .. getTimestamp()
-                    .. "] Warning: Attempting to unclaim without permission ["
-                    .. playerObj:getUsername()
-                    .. "] ["
-                    .. AVCS.dbByVehicleSQLID[arg[1]].CarModel
-                    .. "] ["
-                    .. AVCS.dbByVehicleSQLID[arg[1]].LastLocationX
-                    .. ","
-                    .. AVCS.dbByVehicleSQLID[arg[1]].LastLocationY
-                    .. "]"
-            )
-
-            -- Possible desync has occurred, force sync the user
-            sendServerCommand(playerObj, "AVCS", "requestFullResync", {})
+        local id = type(arg) == "table" and arg[1] or nil
+        if not AVCS.checkManagementPermission(playerObj, id) then
+            writeLog("AVCS", "Rejected claim management from " .. playerObj:getUsername())
+            AVCS.sendFullSync(playerObj)
             return
         end
-        AVCS.unclaimVehicle(
-            playerObj,
-            arg[1],
-            playerObj:getUsername(),
-            AVCS.getPermissionReason(checkResult)
-        )
+        AVCS.unclaimVehicle(playerObj, id, playerObj:getUsername(), "owner/admin management")
     elseif moduleName == "AVCS" and command == "updateLastKnownLogonTime" then
         AVCS.updateLastKnownLogonTime(playerObj)
     elseif moduleName == "AVCS" and command == "updateSpecifyVehicleUserPermission" then
-        -- arg should be table of a lot of things
-        -- VehicleID
-        -- Permission types like AllowDrive, AllowPassenger
-        local checkResult = AVCS.checkManagementPermission(playerObj, arg.VehicleID)
-
-        if type(checkResult) == "boolean" then
-            if checkResult == false then
-                -- Using vanilla logging function, write to a log with suffix AVCS
-                -- Datetime, Unix Time, Warning message, offender username, vehicle full name, coordinate
-                -- [26-03-23 22:23:36.671] [1679840616] Warning: Attempting to unclaim without permission [Username] [Base.ExtremeCar] [13026,1215]
-                writeLog(
-                    "AVCS",
-                    "["
-                        .. getTimestamp()
-                        .. "] Warning: Attempting to modify specific vehicle permissions without permission ["
-                        .. playerObj:getUsername()
-                        .. "] ["
-                        .. AVCS.dbByVehicleSQLID[arg.VehicleID].CarModel
-                        .. "]"
-                )
-
-                -- Possible desync has occurred, force sync the user
-                sendServerCommand(playerObj, "AVCS", "requestFullResync", {})
-                return
-            end
-        elseif checkResult.permissions == false then
-            -- Using vanilla logging function, write to a log with suffix AVCS
-            -- Datetime, Unix Time, Warning message, offender username, vehicle full name, coordinate
-            -- [26-03-23 22:23:36.671] [1679840616] Warning: Attempting to unclaim without permission [Username] [Base.ExtremeCar] [13026,1215]
-            writeLog(
-                "AVCS",
-                "["
-                    .. getTimestamp()
-                    .. "] Warning: Attempting to modify specific vehicle permissions without permission ["
-                    .. playerObj:getUsername()
-                    .. "] ["
-                    .. AVCS.dbByVehicleSQLID[arg.VehicleID].CarModel
-                    .. "]"
-            )
-
-            -- Possible desync has occurred, force sync the user
-            sendServerCommand(playerObj, "AVCS", "requestFullResync", {})
+        local id = type(arg) == "table" and arg.VehicleID or nil
+        if not AVCS.checkManagementPermission(playerObj, id) then
+            writeLog("AVCS", "Rejected permission management from " .. playerObj:getUsername())
+            AVCS.sendFullSync(playerObj)
             return
         end
-        AVCS.updateSpecifyVehicleUserPermission(arg)
+        if not AVCS.updateSpecifyVehicleUserPermission(arg) then
+            AVCS.sendFullSync(playerObj)
+        end
+    elseif moduleName == "AVCS" and command == "adminUntowVehicle" then
+        AVCS.adminUntowVehicle(playerObj, type(arg) == "table" and arg.VehicleID or nil)
     elseif moduleName == "AVCS" and command == "adminTeleportVehicle" then
         -- Handled in Java (AvcsAdminVehicleTeleport) on Storm servers; that handler sets the flag
         if not AvcsAdminTeleportEnabled then
@@ -531,9 +488,6 @@ AVCS.onClientCommand = function(moduleName, command, playerObj, arg)
                 { ok = false, reason = "noStorm", VehicleID = arg and arg.VehicleID or nil }
             )
         end
-    elseif moduleName == "AVCS" and command == "adminUntowVehicle" then
-        -- Pure Lua, no Storm/Java needed: only ever targets an already-loaded vehicle
-        AVCS.adminUntowVehicle(playerObj, type(arg) == "table" and arg.VehicleID or nil)
     elseif moduleName == "AVCS" and command == "rebuildDB" then
         if playerObj:getAccessLevel() == "admin" then
             AVCS.rebuildDB()
