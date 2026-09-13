@@ -35,7 +35,13 @@ end
 -- for ease of use, we assume that the player’s existence has been verified previously.
 function logutils.GetLogLinePrefix(player, action)
     -- TODO: Add ownerID.
-    return getCurrentUserSteamID() .. ' "' .. player:getUsername() .. '" ' .. action
+    local steamID = getCurrentUserSteamID()
+    -- Non-Steam clients have no Steam ID. Keep the username and an explicit
+    -- marker instead of throwing while the connection logger is on OnTick.
+    if steamID == nil or steamID == "" then
+        steamID = "non-steam"
+    end
+    return tostring(steamID) .. ' "' .. player:getUsername() .. '" ' .. action
 end
 
 -- GetLocation returns players or vehicle location in "x,x,z" format.

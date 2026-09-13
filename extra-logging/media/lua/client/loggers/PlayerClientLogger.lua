@@ -114,8 +114,12 @@ end
 PlayerClientLogger.OnTick = function()
     local player = getPlayer()
     if player then
-        PlayerClientLogger.DumpPlayer(player, "connected")
         Events.OnTick.Remove(PlayerClientLogger.OnTick)
+        -- A failed connection snapshot must not run again every rendered frame.
+        local ok, reason = pcall(PlayerClientLogger.DumpPlayer, player, "connected")
+        if not ok then
+            print("[Extra Logging] Connection snapshot failed: " .. tostring(reason))
+        end
     end
 end
 
