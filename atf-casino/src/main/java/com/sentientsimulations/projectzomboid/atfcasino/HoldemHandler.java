@@ -11,8 +11,8 @@ import com.sentientsimulations.projectzomboid.atfcasino.npc.CasinoNpc;
 import com.sentientsimulations.projectzomboid.atfcasino.npc.CasinoNpcManager;
 import io.pzstorm.storm.event.core.OnClientCommand;
 import io.pzstorm.storm.event.core.SubscribeEvent;
-import io.pzstorm.storm.event.lua.OnPlayerDisconnectedEvent;
 import io.pzstorm.storm.event.lua.OnTickEvent;
+import io.pzstorm.storm.event.zomboid.OnPlayerLeaveWorldEvent;
 import java.security.SecureRandom;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -171,9 +171,9 @@ public final class HoldemHandler {
     }
 
     @SubscribeEvent
-    public static void onPlayerDisconnected(OnPlayerDisconnectedEvent event) {
-        if (event.username != null) {
-            DISCONNECTED.add(event.username);
+    public static void onPlayerLeaveWorld(OnPlayerLeaveWorldEvent event) {
+        if (event.getUsername() != null) {
+            DISCONNECTED.add(event.getUsername());
         }
     }
 

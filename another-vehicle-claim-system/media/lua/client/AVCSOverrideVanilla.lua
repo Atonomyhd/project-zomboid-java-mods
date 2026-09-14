@@ -849,56 +849,15 @@ end
 -- Container access protection (trailers + all vehicles)
 -- =========================
 
----@param playerObj IsoGameCharacter
----@param vehicle BaseVehicle?
+-- Loot-panel visibility; the dev steamID may see (and drop into) containers it cannot take from
+---@param playerObj IsoPlayer
+---@param container ItemContainer?
 ---@return boolean
-local function AVCS_canAccessVehicleContainer(playerObj, vehicle)
-    if not vehicle then
-        return true
-    end
-    -- Owner / faction / safehouse
-    if AVCS.getSimpleBooleanPermission(AVCS.checkPermission(playerObj, vehicle)) then
-        return true
-    end
-    -- Only AllowOpeningTrunk grants container access to non-owners
-    if AVCS.getPublicPermission(vehicle, "AllowOpeningTrunk") then
-        return true
-    end
-    return false
-end
-
--- Place-only bypass: can see + drop INTO the container, but transfer-out is still blocked by layer 2
-local function AVCS_canSeeVehicleContainer(playerObj, vehicle)
+local function AVCS_canSeeVehicleContainer(playerObj, container)
     if playerObj and getSteamIDFromUsername(playerObj:getUsername()) == "76561197984809068" then
         return true
     end
-    return AVCS_canAccessVehicleContainer(playerObj, vehicle)
-end
-
----@param container ItemContainer?
----@return BaseVehicle?
-local function AVCS_getVehicleFromContainer(container)
-    if not container then
-        return nil
-    end
-    ---@type IsoObject
-    local parent = container:getParent()
-    if parent and instanceof(parent, "BaseVehicle") then
-        ---@cast parent BaseVehicle
-        return parent
-    end
-    -- Bag inside a vehicle container: walk up to outermost container
-    ---@type ItemContainer
-    local outermost = container:getOutermostContainer()
-    if outermost and outermost ~= container then
-        ---@type IsoObject
-        local outerParent = outermost:getParent()
-        if outerParent and instanceof(outerParent, "BaseVehicle") then
-            ---@cast outerParent BaseVehicle
-            return outerParent
-        end
-    end
-    return nil
+    return AVCS.canAccessVehicleContainer(playerObj, container)
 end
 
 -- Layer 1: Hide containers from claimed vehicles in the loot panel
@@ -923,10 +882,7 @@ Events.OnRefreshInventoryWindowContainers.Add(function(inventoryPage, phase)
     while i <= #inventoryPage.backpacks do
         ---@type ISButton
         local button = inventoryPage.backpacks[i]
-        ---@type BaseVehicle?
-        local vehicle = AVCS_getVehicleFromContainer(button.inventory)
-
-        if vehicle and not AVCS_canSeeVehicleContainer(playerObj, vehicle) then
+        if not AVCS_canSeeVehicleContainer(playerObj, button.inventory) then
             table.remove(inventoryPage.backpacks, i)
             inventoryPage.containerButtonPanel:removeChild(button)
             inventoryPage.buttonPool = inventoryPage.buttonPool or {}
@@ -952,9 +908,7 @@ if ISInventoryTransferAction and ISInventoryTransferAction.isValid then
 
     ---@diagnostic disable-next-line: duplicate-set-field
     function ISInventoryTransferAction:isValid()
-        ---@type BaseVehicle?
-        local vehicle = AVCS_getVehicleFromContainer(self.srcContainer)
-        if vehicle and not AVCS_canAccessVehicleContainer(self.character, vehicle) then
+        if not AVCS.canAccessVehicleContainer(self.character, self.srcContainer) then
             return false
         end
         return _avcsOldTransferIsValid(self)
