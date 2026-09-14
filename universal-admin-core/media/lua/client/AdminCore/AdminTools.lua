@@ -401,7 +401,19 @@ function ISUsersList.comparator(a, b)
     return panel.sortDown and av > bv or not panel.sortDown and av < bv
 end
 
+local factionDisplayCache, factionDisplayUntil = {}, 0
+local function clearFactionDisplayCache()
+    factionDisplayCache, factionDisplayUntil = {}, 0
+end
+if Events and Events.SyncFaction then Events.SyncFaction.Add(clearFactionDisplayCache) end
+
 function ISUsersList:drawDatas(y, item, alt)
+    -- The native list calls doDrawItem for every account, including hidden rows.
+    local clipY = math.max(0, y + self:getYScroll())
+    local clipEnd = math.min(self.height, y + self:getYScroll() + self.itemheight)
+    if clipEnd <= clipY then
+        return y + self.itemheight
+    end
     local p = self.parent
     if not p.uacColumns then
         return y + self.itemheight
@@ -412,13 +424,22 @@ function ISUsersList:drawDatas(y, item, alt)
     end
     self:drawRectBorder(0, y, self.width, self.itemheight, 0.7, 0.4, 0.4, 0.4)
     local name = user:getUsername()
-    local f = T.faction(name)
+    local now = getTimestampMs()
+    if now >= factionDisplayUntil then
+        factionDisplayCache, factionDisplayUntil = {}, now + 2000
+    end
+    local factionName = factionDisplayCache[name]
+    if not factionName then
+        local f = T.faction(name)
+        factionName = f and f:getName() or "None"
+        factionDisplayCache[name] = factionName
+    end
     local data = T.stats[name]
     local connection = user:getLastConnection() or ""
     local date, time = connection:match("^(%S+)%s+(.+)$")
     local values = {
         { name, user:isOnline() and "Online" or "Offline" },
-        { f and f:getName() or "None" },
+        { factionName },
         { user:getRole():getName() },
         { date or connection, time or "" },
         { data and data.tracked and string.format("%.2f h", data.seconds / 3600) or "N/A" },
@@ -432,8 +453,6 @@ function ISUsersList:drawDatas(y, item, alt)
     for i, lines in ipairs(values) do
         local x = p.uacColumns[i] - self.x
         local width = p.uacColumns[i + 1] - p.uacColumns[i]
-        local clipY = math.max(0, y + self:getYScroll())
-        local clipEnd = math.min(self.height, y + self:getYScroll() + self.itemheight)
         if clipEnd > clipY then
             self:setStencilRect(x, clipY, width, clipEnd - clipY)
             for n, text in ipairs(lines) do

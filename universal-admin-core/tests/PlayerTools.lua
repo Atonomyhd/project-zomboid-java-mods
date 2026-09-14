@@ -14,6 +14,12 @@ local sw, sh = 1280, 720
 getCore = function() return {getScreenWidth=function() return sw end, getScreenHeight=function() return sh end} end
 dofile(client .. "WindowSizing.lua")
 dofile(client .. "AdminTools.lua")
+-- Native scrolling lists call the renderer for every offline account too.
+local hidden = {height=100,itemheight=40,getYScroll=function() return -400 end}
+local touched = 0
+local row = {item={getUsername=function() touched=touched+1; error("Hidden row was evaluated") end}}
+for y = 1000, 100000 do ISUsersList.drawDatas(hidden, y, row, false) end
+check(touched == 0, "Off-screen rows do no account/faction/render work")
 local T = AdminCore
 local ownershipPickers=0
 T.replaceOwner=function() ownershipPickers=ownershipPickers+1 end
