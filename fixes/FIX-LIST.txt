@@ -1,6 +1,8 @@
 PERFORMANCE / DESYNC FIX LIST
 Prepared September 13, 2026
-19 planned repairs/investigations. No fixes have been implemented by this list.
+Implementation update September 14: code addresses 18 items in five module PRs.
+MEM-02 native/process RAM growth remains unconfirmed. See IMPLEMENTATION.md.
+The priorities below are the original audit/acceptance plan, not current completion labels.
 
 P1 = first code changes to work through.
 P2 = next changes, after measuring the affected workload.

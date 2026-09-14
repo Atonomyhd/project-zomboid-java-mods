@@ -1,6 +1,6 @@
 # Performance and desync fixes
 
-Prepared September 13, 2026. **19 repair/investigation items**, grouped by subsystem, plus **8 existing fixes to verify** before duplicating work. Implementation status: **pending**. This folder contains the requested fix list and acceptance criteria.
+Updated September 14, 2026. The original **19-item repair/investigation plan** is retained below. Code now addresses **18 items across five module PRs**; the native/process RAM-growth cause (MEM-02) remains unconfirmed. Start with [IMPLEMENTATION.md](IMPLEMENTATION.md) for actual changes, PR links, validation and deployment requirements.
 
 Start with [FIX-LIST.txt](FIX-LIST.txt). The detailed groups are:
 
@@ -14,7 +14,7 @@ Start with [FIX-LIST.txt](FIX-LIST.txt). The detailed groups are:
 | [evidence.md](evidence.md) | Source observations and selected historical failure signatures |
 | [source-snapshot.json](source-snapshot.json) | Audited versions, packaged source names and reference hashes |
 
-**Best first code changes:** skip off-screen User List work; repair AVCS partial-cache handling and coalesce resync requests; use zone-cache revisions in the editor; bound Chunk List highlighting; avoid unchanged full safehouse broadcasts; guard missing player/device references in tick callbacks.
+The detailed files retain the original evidence and acceptance criteria. [IMPLEMENTATION.md](IMPLEMENTATION.md) is the current implementation status; a recorded repair is not proof of the production incident's cause.
 
 The source audit identifies code problems and workload patterns. It does not prove these cause every production incident or promise a particular FPS improvement. Items explicitly marked **investigate first** need a recording or reproduction before selecting a repair. Our User List and Observe changes postdate the original admin complaint.
 
