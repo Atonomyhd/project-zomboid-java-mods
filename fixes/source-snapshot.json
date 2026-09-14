@@ -1,0 +1,77 @@
+﻿{
+    "prepared":  "2026-09-13",
+    "implementationStatus":  "planned; no game code changed",
+    "repairOrInvestigationItems":  19,
+    "existingFixChecks":  8,
+    "gameVersion":  "42.20.4",
+    "installedStormVersion":  "42.20.4_2.10.1",
+    "selectedMods":  99,
+    "luaFilesInAudit":  1629,
+    "embeddedLuaResources":  11,
+    "upstreamReference":  "0da6c064101fdf811e97e5437516c5dd4dd29f2c",
+    "universalAdminCoreProposal":  {
+                                       "pr":  7,
+                                       "revision":  "a1013bb",
+                                       "repository":  "Atonomyhd/project-zomboid-java-mods"
+                                   },
+    "sourcePathNote":  "Paths are relative to the audited packaged mod root, not a local absolute path or this repository. Mod-owned media/lua files map to the module with the same name; third-party/version folders identify the reviewed Workshop packaging.",
+    "originalAuditReferenceHashes":  [
+                                         {
+                                             "name":  "FINDINGS.md",
+                                             "sha256":  "0002c9623370ed448454d40c7ae070428b93537b340eab617349248c15ef8362",
+                                             "availability":  "Original local audit retained by contributor; portable observations are in evidence.md"
+                                         },
+                                         {
+                                             "name":  "log-evidence.txt",
+                                             "sha256":  "a7179fc82145c0fd8766da4b53a28b292657bfcbbe5963a83491540836c0b7c7",
+                                             "availability":  "Original local audit retained by contributor; portable observations are in evidence.md"
+                                         },
+                                         {
+                                             "name":  "VEHICLE-CONTRIBUTION.md",
+                                             "sha256":  "a766437d4e71c1d5f2e38e3eafd61be5dc26e488bfe525b03bf85e6d02b118aa",
+                                             "availability":  "Original local audit retained by contributor; portable observations are in evidence.md"
+                                         }
+                                     ],
+    "keySources":  [
+                       {
+                           "path":  "mod-universal-admin-core-b42/42/media/lua/client/AdminCore/AdminTools.lua",
+                           "sha256":  "d09033b6b4db846c361022fe498c5476a8ddcdd8b799faa062fbeff2c81793a9"
+                       },
+                       {
+                           "path":  "mod-ChunkList/42/media/lua/client/ChunkLister.lua",
+                           "sha256":  "24053239cb8676621619813d5fab50349770ecffa2864386c096105449de293e"
+                       },
+                       {
+                           "path":  "another-vehicle-claim-system-b42/42/media/lua/client/AVCSClient.lua",
+                           "sha256":  "1918d6f30ed423bb9857eff64e1fa84bfd4e31db437d1838a6e59b494b284bd2"
+                       },
+                       {
+                           "path":  "another-vehicle-claim-system-b42/42/media/lua/client/UI/AVCSUserPermissionPanel.lua",
+                           "sha256":  "80a626ca350d7cca9e753dc4f96ff3280bc76bc58fe644965599b5ccb3dce14f"
+                       },
+                       {
+                           "path":  "mod-zone-marker-b42/42/media/lua/client/ZoneMarkerEditorMode.lua",
+                           "sha256":  "016019975cc71aff5c0760be291232725951f3820e02f504ab2b5b6555a7d038"
+                       },
+                       {
+                           "path":  "mod-zone-marker-b42/42/media/lua/client/ZoneMarkerClient.lua",
+                           "sha256":  "e5fafa68fbac348b6bc7917ef28538e59c7014877bfede987e9d4de13b81b619"
+                       },
+                       {
+                           "path":  "mod-after_the_fall_core_b42/42.14/media/lua/server/ATF_SafetySystem/ATF_SafehouseGuard_Server.lua",
+                           "sha256":  "4ef976a665a9af213add2a03f0ef29f2e90fd871f6e0475a53e04914dbdcbadd"
+                       },
+                       {
+                           "path":  "mod-after_the_fall_core_b42/42.14/media/lua/client/ATF_SafetySystem/ATF_SafehouseGuard_Client.lua",
+                           "sha256":  "f56a0d80215e7013fc64fefde5598572be5b78b9b8f2d003027e520c5c295ca4"
+                       },
+                       {
+                           "path":  "mod-LifestyleHobbies/common/media/lua/client/LSEffects/LSPerTick.lua",
+                           "sha256":  "1b013ca10fc89ccda1c2c3f33f0cfbf0f9348d3347d17d3fd7068535dcc2734d"
+                       },
+                       {
+                           "path":  "mod-TrueMusicRadio42/42.20/media/lua/client/TrueMusicRadio/TMRadio.lua",
+                           "sha256":  "2039ee926e32b59ed71d365ce0bd1e2e13541a45433a7721b6516e0724ed8312"
+                       }
+                   ]
+}

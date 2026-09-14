@@ -1,0 +1,72 @@
+PERFORMANCE / DESYNC FIX LIST
+Prepared September 13, 2026
+19 planned repairs/investigations. No fixes have been implemented by this list.
+
+P1 = first code changes to work through.
+P2 = next changes, after measuring the affected workload.
+INVESTIGATE = evidence/reproduction needed before choosing the repair.
+Code evidence is not proof of the reported production incident's cause.
+
+UI / CLIENT PERFORMANCE - see 01-ui-performance.md
+
+[P1] UI-01  Skip off-screen User List rows; cache faction lookups and cell text.
+[P1] UI-02  Bound Chunk List highlighting; use keyed coordinate lookup and cleanup.
+[P2] UI-03  Cache AVCS map records instead of rebuilding them every map draw.
+[P2] UI-04  Cache/filter Zone Marker overlays before drawing off-screen zones.
+[P2] UI-05  Reduce safehouse HUD scans and full-list log bursts.
+[INVESTIGATE] UI-06  Coalesce unnecessary Admin Powers refreshes, preserving edits.
+
+DESYNC / NETWORKING - see 02-desync-and-networking.md
+
+[P1] SYNC-01  Handle partial AVCS caches without exceptions or half-applied updates.
+[P1] SYNC-02  Coalesce full-resync requests with bounded retry/backoff.
+[P2] SYNC-03  Acknowledge permission saves and reject stale revisions.
+[P2] SYNC-04  Recover vehicle claim identity when updates arrive while unloaded.
+[P1] SYNC-05  Stop broadcasting unchanged complete safehouse snapshots.
+[P2] SYNC-06  Reconcile safehouses by stable identity instead of display title.
+[P1] SYNC-07  Refresh zone lists by cache revision, even when counts stay unchanged.
+[INVESTIGATE] SYNC-08  Measure Observe camera/teleport behavior and prevent overlapping moves if confirmed.
+
+MEMORY / CRASHES / ERROR LOOPS - see 03-memory-and-crashes.md
+
+[INVESTIGATE] MEM-01  Reproduce and repair the null skinTransforms vehicle-preview failure.
+[INVESTIGATE] MEM-02  Identify the native/process memory growth behind the recorded allocation crash.
+[P2] MEM-03  Bound Error Magnifier history and visible-window refresh work.
+[P2] MEM-04  Spread Lifestyle's startup area scan over a bounded work queue.
+[P1] MEM-05  Guard missing players/devices before tick callbacks dereference them.
+
+EXISTING FIXES TO VERIFY - see 04-existing-fixes.md
+
+CHECK-01  Storm vehicle sound initialization / packet parsing fix.
+CHECK-02  Storm occupied-vehicle chunk rehoming fix.
+CHECK-03  Extra Logging missing Steam ID and repeated startup-error fix.
+CHECK-04  ATF True Music Radio whereAreYou typo fix.
+CHECK-05  ATF Talis server zombie-scan disable patch.
+CHECK-06  ATF targeted True Music Radio playlist replies.
+CHECK-07  Existing Observe heartbeat/stop/camera-lease corrections.
+CHECK-08  Existing AVCS relocation synchronization contribution.
+
+These checks mean "verify deployment and behavior," not "write the same fix again."
+
+REPOSITORY PLACEMENT
+
+Universal Admin Core -> its own reusable module.
+AVCS -> another-vehicle-claim-system.
+Zone Marker -> zone-marker.
+Vanilla rendering/vehicle engine defects -> Storm, if reproduced and scoped.
+ATF-specific or third-party compatibility patches -> guspuffy-atf-patches,
+or the original mod's repository when its maintainer prefers.
+Native memory -> fix the measured owner; do not assume a mod before profiling.
+
+FIRST WORK PACKAGES
+
+1. UI-01: small, measurable admin-only rendering fix.
+2. SYNC-01 + SYNC-02: robust AVCS cache recovery and less recovery traffic.
+3. SYNC-07: prevent stale zone editor data.
+4. UI-02: prevent selection cost growing with long admin travel sessions.
+5. SYNC-05 + UI-05: reduce safehouse network/CPU/log bursts.
+6. MEM-05: isolate missing-player/device transition errors.
+7. Use diagnostics and two-client testing to select remaining protocol/render repairs.
+
+None of these has yet been proven to explain all disappearing trees, zombies,
+vehicles and UI together. The test plan is in 05-test-and-pr-order.md.
