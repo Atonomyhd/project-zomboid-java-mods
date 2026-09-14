@@ -21,6 +21,7 @@ import zombie.network.packets.INetworkPacket;
 /** Server-only adapter. Authorization is repeated here, not delegated to UI visibility. */
 public final class AdminCoreBridge {
     private static final Map<IsoPlayer, ObserveMove> observeMoves = new WeakHashMap<>();
+
     private AdminCoreBridge() {}
 
     private static boolean allowed(IsoPlayer actor, Capability cap) {
@@ -251,12 +252,15 @@ public final class AdminCoreBridge {
         }
         long now = System.nanoTime();
         ObserveMove previous = observeMoves.get(actor);
-        if (previous != null && previous.waiting(actor.getX(), actor.getY(), actor.getZ(), now)) return true;
+        if (previous != null && previous.waiting(actor.getX(), actor.getY(), actor.getZ(), now))
+            return true;
         observeMoves.remove(actor);
         double dx = target.getX() - actor.getX(), dy = target.getY() - actor.getY();
         if (dx * dx + dy * dy > 64 || (int) actor.getZ() != (int) target.getZ()) {
             GameServer.sendTeleport(actor, target.getX() + 2, target.getY() + 2, target.getZ());
-            observeMoves.put(actor, new ObserveMove(target.getX() + 2, target.getY() + 2, target.getZ(), now));
+            observeMoves.put(
+                    actor,
+                    new ObserveMove(target.getX() + 2, target.getY() + 2, target.getZ(), now));
         }
         return true;
     }

@@ -401,11 +401,13 @@ function ISUsersList.comparator(a, b)
     return panel.sortDown and av > bv or not panel.sortDown and av < bv
 end
 
-local factionDisplayCache, factionDisplayUntil = {}, 0
+local factionDisplayCache, factionDisplayUntil, factionDisplayCount = {}, 0, 0
 local function clearFactionDisplayCache()
-    factionDisplayCache, factionDisplayUntil = {}, 0
+    factionDisplayCache, factionDisplayUntil, factionDisplayCount = {}, 0, 0
 end
-if Events and Events.SyncFaction then Events.SyncFaction.Add(clearFactionDisplayCache) end
+if Events and Events.SyncFaction then
+    Events.SyncFaction.Add(clearFactionDisplayCache)
+end
 
 function ISUsersList:drawDatas(y, item, alt)
     -- The native list calls doDrawItem for every account, including hidden rows.
@@ -425,30 +427,64 @@ function ISUsersList:drawDatas(y, item, alt)
     self:drawRectBorder(0, y, self.width, self.itemheight, 0.7, 0.4, 0.4, 0.4)
     local name = user:getUsername()
     local now = getTimestampMs()
-    if now >= factionDisplayUntil then
-        factionDisplayCache, factionDisplayUntil = {}, now + 2000
+    if now >= factionDisplayUntil or factionDisplayCount >= 256 then
+        factionDisplayCache, factionDisplayUntil, factionDisplayCount = {}, now + 2000, 0
     end
     local factionName = factionDisplayCache[name]
     if not factionName then
         local f = T.faction(name)
         factionName = f and f:getName() or "None"
         factionDisplayCache[name] = factionName
+        factionDisplayCount = factionDisplayCount + 1
     end
     local data = T.stats[name]
     local connection = user:getLastConnection() or ""
-    local date, time = connection:match("^(%S+)%s+(.+)$")
-    local values = {
-        { name, user:isOnline() and "Online" or "Offline" },
-        { factionName },
-        { user:getRole():getName() },
-        { date or connection, time or "" },
-        { data and data.tracked and string.format("%.2f h", data.seconds / 3600) or "N/A" },
-        {
-            "Warn: " .. user:getWarningPoints(),
-            "Suspect: " .. user:getSuspicionPoints(),
-            "Kicks: " .. user:getKicks(),
-        },
-    }
+    local online, role = user:isOnline(), user:getRole():getName()
+    local warning, suspicion, kicks =
+        user:getWarningPoints(), user:getSuspicionPoints(), user:getKicks()
+    local seconds = data and data.tracked and data.seconds or false
+    local epoch = math.floor(now / 2000)
+    if self.uacDrawEpoch ~= epoch or (self.uacDrawCount or 0) >= 256 then
+        self.uacDrawCache, self.uacDrawCount, self.uacDrawEpoch = {}, 0, epoch
+    end
+    local cached = self.uacDrawCache[name]
+    if
+        not cached
+        or cached.online ~= online
+        or cached.role ~= role
+        or cached.connection ~= connection
+        or cached.faction ~= factionName
+        or cached.seconds ~= seconds
+        or cached.warning ~= warning
+        or cached.suspicion ~= suspicion
+        or cached.kicks ~= kicks
+    then
+        local date, time = connection:match("^(%S+)%s+(.+)$")
+        local values = {
+            { name, online and "Online" or "Offline" },
+            { factionName },
+            { role },
+            { date or connection, time or "" },
+            { seconds and string.format("%.2f h", seconds / 3600) or "N/A" },
+            { "Warn: " .. warning, "Suspect: " .. suspicion, "Kicks: " .. kicks },
+        }
+        if not cached then
+            self.uacDrawCount = self.uacDrawCount + 1
+        end
+        cached = {
+            online = online,
+            role = role,
+            connection = connection,
+            faction = factionName,
+            seconds = seconds,
+            warning = warning,
+            suspicion = suspicion,
+            kicks = kicks,
+            values = values,
+        }
+        self.uacDrawCache[name] = cached
+    end
+    local values = cached.values
     local line = getTextManager():getFontHeight(UIFont.Small) + 3
     for i, lines in ipairs(values) do
         local x = p.uacColumns[i] - self.x

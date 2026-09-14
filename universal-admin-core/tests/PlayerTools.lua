@@ -133,4 +133,22 @@ check(#commands==2,"Reject unknown script item")
 input="Base.Hammer"; panel.playerUsername='bad"name'; ISPlayerStatsManageInvUI.onAddItem(panel,button)
 check(#commands==2,"Reject unsafe username")
 
+local factionReads, online = 0, true
+getTimestampMs=function() return 100000 end
+UIFont={Small=1}; getTextManager=function() return {getFontHeight=function() return 12 end} end
+T.stats={}
+T.faction=function() factionReads=factionReads+1; return {getName=function() return "Team" end} end
+local account={getUsername=function() return "guest" end,isOnline=function() return online end,
+    getLastConnection=function() return "2026-09-13 12:00" end,getRole=function() return {getName=function() return "User" end} end,
+    getWarningPoints=function() return 0 end,getSuspicionPoints=function() return 0 end,getKicks=function() return 0 end}
+local list={height=100,width=600,itemheight=40,x=0,parent={uacColumns={0,100,200,300,400,500,600}},getYScroll=function() return 0 end}
+for _,fn in ipairs({"drawRect","drawRectBorder","setStencilRect","drawText","clearStencilRect"}) do list[fn]=function() end end
+ISUsersList.drawDatas(list,0,{item=account},false)
+local cached=list.uacDrawCache.guest
+for i=1,100 do ISUsersList.drawDatas(list,0,{item=account},false) end
+check(list.uacDrawCache.guest==cached and factionReads==1,"Visible rows reuse formatted text and faction display")
+online=false; ISUsersList.drawDatas(list,0,{item=account},false)
+check(list.uacDrawCache.guest.values[1][2]=="Offline","Changed online state immediately invalidates row text")
+T.stats.guest={tracked=true,seconds=3600}; ISUsersList.drawDatas(list,0,{item=account},false)
+check(list.uacDrawCache.guest.values[5][1]=="1.00 h","Fresh playtime invalidates cached formatting")
 print("PASS: " .. checks .. " player administration regression checks")

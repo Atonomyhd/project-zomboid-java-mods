@@ -29,6 +29,14 @@ or send additional requests. The separate offline-account tool remains staff-onl
 
 ## Available now
 
+Version 0.1.5 skips hidden User List rows before account/faction lookups and caches
+formatted visible cells until their inputs change. Display caches are capped at
+256 entries and refreshed within two seconds; faction events invalidate immediately.
+Observe now waits for an earlier relocation to arrive before sending the next one,
+with a six-second retry bound. Permission revocation is checked before that wait,
+and stopping clears pending movement. This reduces repeated relocation requests
+while the client is still loading, without weakening the server-owned return lease.
+
 Version 0.1.3 fixes observe stopping after about 10–12 seconds. B42 encodes empty
 client-command tables as nil; the server now accepts that for heartbeat and stop
 commands while retaining payload validation for other actions. Observe updates run
