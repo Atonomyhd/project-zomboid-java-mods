@@ -67,7 +67,7 @@ function AVCS.claimVehicle(playerObj, vehicleID)
         sendServerCommand(
             "AVCS",
             "registerClientVehicleSQLID",
-            { vehicleObj:getId(), vehicleObj:getModData().SQLID }
+            { vehicleObj:getId(), vehicleObj:getModData().SQLID, AVCS.syncVehicleIdentity(vehicleObj) }
         )
     end
 
@@ -316,6 +316,8 @@ function AVCS.updateSpecifyVehicleUserPermission(arg)
         end
     end
 
+    record.PermissionRevision = (record.PermissionRevision or 0) + 1
+    update.PermissionRevision = record.PermissionRevision
     ModData.add("AVCSByVehicleSQLID", AVCS.dbByVehicleSQLID)
     sendServerCommand("AVCS", "updateClientSpecifyVehicleUserPermission", update)
     return true
@@ -356,7 +358,18 @@ end
 
 -- Send full database tables to a specific client via sendServerCommand
 -- Workaround for broken ModData.request() / OnReceiveGlobalModData in Build 42.15.0
-function AVCS.sendFullSync(playerObj)
+local lastFullSync = setmetatable({}, { __mode = "k" })
+function AVCS.sendFullSync(playerObj, requestId)
+    if not playerObj then return end
+    local now = getTimestampMs()
+    local previous = lastFullSync[playerObj]
+    if previous and now >= previous and now - previous < 4000 then return end
+    lastFullSync[playerObj] = now
+    if type(requestId) == "number" and requestId == requestId then
+        sendServerCommand(playerObj, "AVCS", "fullSyncVehicleDBV2", { requestId = requestId, data = AVCS.dbByVehicleSQLID })
+        sendServerCommand(playerObj, "AVCS", "fullSyncPlayerDBV2", { requestId = requestId, data = AVCS.dbByPlayerID })
+        return
+    end
     sendServerCommand(playerObj, "AVCS", "fullSyncVehicleDB", AVCS.dbByVehicleSQLID)
     sendServerCommand(playerObj, "AVCS", "fullSyncPlayerDB", AVCS.dbByPlayerID)
 end
@@ -453,7 +466,7 @@ end
 
 AVCS.onClientCommand = function(moduleName, command, playerObj, arg)
     if moduleName == "AVCS" and command == "requestFullSync" then
-        AVCS.sendFullSync(playerObj)
+        AVCS.sendFullSync(playerObj, type(arg) == "table" and arg.requestId or nil)
     elseif moduleName == "AVCS" and command == "claimVehicle" then
         AVCS.claimVehicle(playerObj, arg)
     elseif moduleName == "AVCS" and command == "unclaimVehicle" then
@@ -468,12 +481,17 @@ AVCS.onClientCommand = function(moduleName, command, playerObj, arg)
         AVCS.updateLastKnownLogonTime(playerObj)
     elseif moduleName == "AVCS" and command == "updateSpecifyVehicleUserPermission" then
         local id = type(arg) == "table" and arg.VehicleID or nil
-        if not AVCS.checkManagementPermission(playerObj, id) then
+        local permitted = AVCS.checkManagementPermission(playerObj, id)
+        local ok = permitted and AVCS.updateSpecifyVehicleUserPermission(arg) or false
+        if type(arg) == "table" and type(arg.requestId) == "number" then
+            sendServerCommand(playerObj, "AVCS", "permissionResult", { VehicleID = id, requestId = arg.requestId, ok = ok })
+        end
+        if not permitted then
             writeLog("AVCS", "Rejected permission management from " .. playerObj:getUsername())
             AVCS.sendFullSync(playerObj)
             return
         end
-        if not AVCS.updateSpecifyVehicleUserPermission(arg) then
+        if not ok then
             AVCS.sendFullSync(playerObj)
         end
     elseif moduleName == "AVCS" and command == "adminUntowVehicle" then
@@ -495,18 +513,22 @@ AVCS.onClientCommand = function(moduleName, command, playerObj, arg)
     elseif moduleName == "AVCS" and command == "relayClientUpdateVehicleSQLID" then
         -- Transition from Mule Part SQLID to Vehicle SQLID
         -- Relay ModData changes
+        if type(arg) ~= "table" or type(arg[1]) ~= "number" then return end
         local vehicleObj = getVehicleById(arg[1])
         if vehicleObj then
             -- We removing at server-side because client-side takes time to be updated to the server
             -- Client-side mod data changes can unfortunately be lost if server shutdown at this very moment
             -- It just bad game design thus we doing it at server-side in hope that the changes is saved if that happens
             local tempPart = AVCS.getMulePart(vehicleObj)
-            vehicleObj:getModData().SQLID = tempPart:getModData().SQLID
-            tempPart:getModData().SQLID = nil
+            if not vehicleObj:getModData().SQLID and tempPart and tempPart:getModData().SQLID then
+                vehicleObj:getModData().SQLID = tempPart:getModData().SQLID
+                tempPart:getModData().SQLID = nil
+                vehicleObj:transmitPartModData(tempPart)
+            end
             sendServerCommand(
                 "AVCS",
                 "registerClientVehicleSQLID",
-                { vehicleObj:getId(), vehicleObj:getModData().SQLID }
+                { vehicleObj:getId(), vehicleObj:getModData().SQLID, AVCS.syncVehicleIdentity(vehicleObj) }
             )
         end
     end

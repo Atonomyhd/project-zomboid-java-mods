@@ -14,6 +14,12 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Management regression failed' }
     & lua "$PSScriptRoot/tests/VehicleSync.lua"
     if ($LASTEXITCODE -ne 0) { throw 'Vehicle sync regression failed' }
+    & lua "$PSScriptRoot/tests/ClaimCache.lua"
+    if ($LASTEXITCODE -ne 0) { throw 'Claim cache regression failed' }
+    & lua "$PSScriptRoot/tests/PermissionAcknowledgment.lua"
+    if ($LASTEXITCODE -ne 0) { throw 'Permission acknowledgment regression failed' }
+    & lua "$PSScriptRoot/tests/VehicleIdentity.lua"
+    if ($LASTEXITCODE -ne 0) { throw 'Vehicle identity regression failed' }
     & lua "$PSScriptRoot/tests/ClaimLayout.lua" $claim $sizing
     if ($LASTEXITCODE -ne 0) { throw 'Claim layout regression failed' }
     & lua "$PSScriptRoot/tests/ClaimResize.lua" $GameDir $claim $sizing $helper

@@ -14,8 +14,21 @@ local function getVehicleDisplayName(name)
     return displayName
 end
 
+local cachedVehicles, cachedRevision, cachedPlayer, cachedLanguage, cacheUntil
+local function invalidateVehicles()
+    cachedVehicles = nil
+end
+Events.OnSafehousesChanged.Add(invalidateVehicles)
+Events.SyncFaction.Add(invalidateVehicles)
+
 local function getDetailedVehicleList()
+    local player = getPlayer()
+    local now = getTimestampMs()
+    local language = Translator.getLanguage()
+    if cachedVehicles and cachedRevision == AVCS.cacheRevision and cachedPlayer == player
+        and cachedLanguage == language and now < cacheUntil then return cachedVehicles end
     local response = {}
+    local seen = {}
 
     if AVCS == nil or AVCS.dbByPlayerID == nil or AVCS.dbByVehicleSQLID == nil then
         return response
@@ -27,7 +40,8 @@ local function getDetailedVehicleList()
             for vehicleID, _ in pairs(playerVehicles) do
                 if vehicleID ~= "LastKnownLogonTime" then
                     local vehicleData = AVCS.dbByVehicleSQLID[vehicleID]
-                    if vehicleData then
+                    if vehicleData and not seen[vehicleID] then
+                        seen[vehicleID] = true
                         table.insert(response, {
                             vehicleID = vehicleID,
                             ownerPlayerId = vehicleData.OwnerPlayerID,
@@ -45,7 +59,6 @@ local function getDetailedVehicleList()
         end
     end
 
-    local player = getPlayer()
     if player == nil then
         return response
     end
@@ -84,6 +97,8 @@ local function getDetailedVehicleList()
         end
     end
 
+    cachedVehicles, cachedRevision, cachedPlayer = response, AVCS.cacheRevision, player
+    cachedLanguage, cacheUntil = language, now + 2000
     return response
 end
 

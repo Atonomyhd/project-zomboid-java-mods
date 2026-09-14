@@ -4,6 +4,7 @@ local function check(value,msg) assert(value,msg); n=n+1 end
 Events=setmetatable({}, {__index=function() return {Add=function() end} end})
 isClient=function() return false end; isServer=function() return true end
 getTimestamp=function() return 100 end; writeLog=function() end
+getTimestampMs=function() return 100000 end
 ModData={add=function() end}
 local replies={}
 sendServerCommand=function(...) replies[#replies+1]={...} end

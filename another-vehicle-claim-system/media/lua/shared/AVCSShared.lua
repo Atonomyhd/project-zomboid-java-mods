@@ -51,7 +51,26 @@ function AVCS.matchTrunkPart(strTrunk)
     return false
 end
 
+-- Vehicle-wide IsoObject.transmitModData uses a grid-object packet and is not a
+-- vehicle sync API. Carry the ID in an existing permanent part's native ModData
+-- stream instead; unloaded vehicles receive it in their normal full spawn data.
+function AVCS.syncVehicleIdentity(vehicleObj)
+    if not isServer() or isClient() then return false end
+    local id = vehicleObj:getModData().SQLID
+    local part = id and AVCS.getMulePart(vehicleObj)
+    if not part then return false end
+    if part:getModData().AVCSIdentity ~= id then
+        part:getModData().AVCSIdentity = id
+        vehicleObj:transmitPartModData(part)
+    end
+    return true
+end
+
 function AVCS.getVehicleID(vehicleObj)
+    if isClient() and SandboxVars and SandboxVars.AVCS then
+        local part = AVCS.getMulePart(vehicleObj)
+        if part and part:getModData().AVCSIdentity then return part:getModData().AVCSIdentity end
+    end
     if vehicleObj:getModData().SQLID then
         return vehicleObj:getModData().SQLID
     else
@@ -61,11 +80,12 @@ function AVCS.getVehicleID(vehicleObj)
                 if not isClient() and isServer() then
                     vehicleObj:getModData().SQLID = tempPart:getModData().SQLID
                     tempPart:getModData().SQLID = nil
+                    vehicleObj:transmitPartModData(tempPart)
                     -- Vehicle ModData does not update immediately thus we need to force this for same cell players
                     sendServerCommand(
                         "AVCS",
                         "registerClientVehicleSQLID",
-                        { vehicleObj:getId(), vehicleObj:getModData().SQLID }
+                        { vehicleObj:getId(), vehicleObj:getModData().SQLID, AVCS.syncVehicleIdentity(vehicleObj) }
                     )
                     return vehicleObj:getModData().SQLID
                 else
@@ -86,6 +106,7 @@ function AVCS.getVehicleID(vehicleObj)
 end
 
 function AVCS.checkMaxClaim(playerObj)
+    if AVCS.Sync and not AVCS.Sync.ready() then return false end
     -- Privileged users has no limit
     local level = string.lower(playerObj:getAccessLevel() or "none")
     if level == "admin" then
@@ -113,6 +134,7 @@ function AVCS.checkMaxClaim(playerObj)
 end
 
 function AVCS.getPublicPermission(vehicleObj, type)
+    if AVCS.Sync and not AVCS.Sync.ready() then return false end
     if not AVCS.dbByVehicleSQLID then
         return true
     end
@@ -143,6 +165,9 @@ table / array = owned and permission
 --]]
 
 function AVCS.checkPermission(playerObj, vehicleObj)
+    if AVCS.Sync and not AVCS.Sync.ready() then
+        return { permissions = false, reason = "syncing", ownerid = "Synchronizing claims", LastKnownLogonTime = 0 }
+    end
     if not AVCS.dbByVehicleSQLID or not AVCS.dbByPlayerID then
         return true
     end
