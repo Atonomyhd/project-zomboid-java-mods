@@ -5,8 +5,12 @@ modInfo {
 	requiresStorm = false
 }
 
-configurations.compileOnly.dependencies.removeAll { it instanceof FileCollectionDependency }
-configurations.testImplementation.dependencies.removeAll { it instanceof FileCollectionDependency }
+configurations.compileOnly.dependencies.removeAll {
+	it instanceof FileCollectionDependency
+}
+configurations.testImplementation.dependencies.removeAll {
+	it instanceof FileCollectionDependency
+}
 def gameApi = files(layout.buildDirectory.file('zomboid-classpath/projectzomboid.jar')).builtBy('extractZomboidFiles')
 dependencies {
 	compileOnly gameApi
