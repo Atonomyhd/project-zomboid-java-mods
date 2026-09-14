@@ -64,11 +64,11 @@ function AVCS.claimVehicle(playerObj, vehicleID)
     if not vehicleID then
         vehicleObj:getModData().SQLID = tonumber(getTimestamp() .. vehicleObj:getSqlId())
         vehicleID = vehicleObj:getModData().SQLID
-        sendServerCommand(
-            "AVCS",
-            "registerClientVehicleSQLID",
-            { vehicleObj:getId(), vehicleObj:getModData().SQLID, AVCS.syncVehicleIdentity(vehicleObj) }
-        )
+        sendServerCommand("AVCS", "registerClientVehicleSQLID", {
+            vehicleObj:getId(),
+            vehicleObj:getModData().SQLID,
+            AVCS.syncVehicleIdentity(vehicleObj),
+        })
     end
 
     -- Make sure is not already claimed
@@ -360,14 +360,28 @@ end
 -- Workaround for broken ModData.request() / OnReceiveGlobalModData in Build 42.15.0
 local lastFullSync = setmetatable({}, { __mode = "k" })
 function AVCS.sendFullSync(playerObj, requestId)
-    if not playerObj then return end
+    if not playerObj then
+        return
+    end
     local now = getTimestampMs()
     local previous = lastFullSync[playerObj]
-    if previous and now >= previous and now - previous < 4000 then return end
+    if previous and now >= previous and now - previous < 4000 then
+        return
+    end
     lastFullSync[playerObj] = now
     if type(requestId) == "number" and requestId == requestId then
-        sendServerCommand(playerObj, "AVCS", "fullSyncVehicleDBV2", { requestId = requestId, data = AVCS.dbByVehicleSQLID })
-        sendServerCommand(playerObj, "AVCS", "fullSyncPlayerDBV2", { requestId = requestId, data = AVCS.dbByPlayerID })
+        sendServerCommand(
+            playerObj,
+            "AVCS",
+            "fullSyncVehicleDBV2",
+            { requestId = requestId, data = AVCS.dbByVehicleSQLID }
+        )
+        sendServerCommand(
+            playerObj,
+            "AVCS",
+            "fullSyncPlayerDBV2",
+            { requestId = requestId, data = AVCS.dbByPlayerID }
+        )
         return
     end
     sendServerCommand(playerObj, "AVCS", "fullSyncVehicleDB", AVCS.dbByVehicleSQLID)
@@ -484,7 +498,12 @@ AVCS.onClientCommand = function(moduleName, command, playerObj, arg)
         local permitted = AVCS.checkManagementPermission(playerObj, id)
         local ok = permitted and AVCS.updateSpecifyVehicleUserPermission(arg) or false
         if type(arg) == "table" and type(arg.requestId) == "number" then
-            sendServerCommand(playerObj, "AVCS", "permissionResult", { VehicleID = id, requestId = arg.requestId, ok = ok })
+            sendServerCommand(
+                playerObj,
+                "AVCS",
+                "permissionResult",
+                { VehicleID = id, requestId = arg.requestId, ok = ok }
+            )
         end
         if not permitted then
             writeLog("AVCS", "Rejected permission management from " .. playerObj:getUsername())
@@ -513,7 +532,9 @@ AVCS.onClientCommand = function(moduleName, command, playerObj, arg)
     elseif moduleName == "AVCS" and command == "relayClientUpdateVehicleSQLID" then
         -- Transition from Mule Part SQLID to Vehicle SQLID
         -- Relay ModData changes
-        if type(arg) ~= "table" or type(arg[1]) ~= "number" then return end
+        if type(arg) ~= "table" or type(arg[1]) ~= "number" then
+            return
+        end
         local vehicleObj = getVehicleById(arg[1])
         if vehicleObj then
             -- We removing at server-side because client-side takes time to be updated to the server
@@ -525,11 +546,11 @@ AVCS.onClientCommand = function(moduleName, command, playerObj, arg)
                 tempPart:getModData().SQLID = nil
                 vehicleObj:transmitPartModData(tempPart)
             end
-            sendServerCommand(
-                "AVCS",
-                "registerClientVehicleSQLID",
-                { vehicleObj:getId(), vehicleObj:getModData().SQLID, AVCS.syncVehicleIdentity(vehicleObj) }
-            )
+            sendServerCommand("AVCS", "registerClientVehicleSQLID", {
+                vehicleObj:getId(),
+                vehicleObj:getModData().SQLID,
+                AVCS.syncVehicleIdentity(vehicleObj),
+            })
         end
     end
 end

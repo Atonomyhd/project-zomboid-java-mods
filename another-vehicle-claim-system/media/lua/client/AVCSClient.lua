@@ -17,7 +17,9 @@ local requestFullSync = Sync.request
 function AVCS.updateClientClaimVehicle(arg)
     -- A desync has occurred, this shouldn't happen
     -- We will request full data from server
-    if type(arg) ~= "table" or not arg.VehicleID or not arg.OwnerPlayerID then return end
+    if type(arg) ~= "table" or not arg.VehicleID or not arg.OwnerPlayerID then
+        return
+    end
     if not Sync.deltaReady() then
         requestFullSync()
         return
@@ -26,7 +28,10 @@ function AVCS.updateClientClaimVehicle(arg)
     local previous = AVCS.dbByVehicleSQLID[arg.VehicleID]
     if previous and previous.OwnerPlayerID ~= arg.OwnerPlayerID then
         local owner = AVCS.dbByPlayerID[previous.OwnerPlayerID]
-        if not owner then requestFullSync(); return end
+        if not owner then
+            requestFullSync()
+            return
+        end
         owner[arg.VehicleID] = nil
     end
     AVCS.dbByVehicleSQLID[arg.VehicleID] = {
@@ -51,8 +56,12 @@ function AVCS.updateClientClaimVehicle(arg)
 end
 
 function AVCS.updateClientUnclaimVehicle(arg)
-    if type(arg) ~= "table" or not arg.VehicleID then return end
-    if not Sync.deltaReady() then return end
+    if type(arg) ~= "table" or not arg.VehicleID then
+        return
+    end
+    if not Sync.deltaReady() then
+        return
+    end
     -- A desync has occurred, this shouldn't happen
     -- We will request full data from server
     if not AVCS.dbByVehicleSQLID then
@@ -77,7 +86,9 @@ function AVCS.updateClientUnclaimVehicle(arg)
 end
 
 function AVCS.updateClientVehicleCoordinate(arg)
-    if not Sync.deltaReady() then return end
+    if not Sync.deltaReady() then
+        return
+    end
     -- A desync has occurred, this shouldn't happen
     -- We will request full data from server
     if not AVCS.dbByVehicleSQLID then
@@ -98,7 +109,9 @@ end
 
 -- Batched form sent by the Storm pre-save location sync (AvcsVehicleLocationSync.java)
 function AVCS.updateClientVehicleCoordinates(arg)
-    if not Sync.deltaReady() then return end
+    if not Sync.deltaReady() then
+        return
+    end
     if not AVCS.dbByVehicleSQLID then
         requestFullSync()
         return
@@ -122,7 +135,9 @@ function AVCS.updateClientVehicleCoordinates(arg)
 end
 
 function AVCS.updateClientLastLogon(arg)
-    if not Sync.deltaReady() then return end
+    if not Sync.deltaReady() then
+        return
+    end
     if not AVCS.dbByPlayerID then
         requestFullSync()
         return
@@ -137,14 +152,18 @@ function AVCS.updateClientLastLogon(arg)
 end
 
 function AVCS.updateClientSpecifyVehicleUserPermission(arg)
-    if not Sync.deltaReady() then return end
+    if not Sync.deltaReady() then
+        return
+    end
     if not AVCS.dbByVehicleSQLID then
         requestFullSync()
         return
     end
     if AVCS.dbByVehicleSQLID[arg.VehicleID] then
         local record = AVCS.dbByVehicleSQLID[arg.VehicleID]
-        if arg.PermissionRevision and arg.PermissionRevision < (record.PermissionRevision or 0) then return end
+        if arg.PermissionRevision and arg.PermissionRevision < (record.PermissionRevision or 0) then
+            return
+        end
         for k, v in pairs(arg) do
             if k ~= "VehicleID" then
                 if v then
@@ -162,14 +181,20 @@ end
 
 -- Vehicle ModData does not update immediately, workaround to force sync
 function AVCS.registerClientVehicleSQLID(arg)
-    if type(arg) ~= "table" or type(arg[1]) ~= "number" or type(arg[2]) ~= "number" then return end
-    if arg[3] == true then return end -- Native part data carries the authoritative identity.
+    if type(arg) ~= "table" or type(arg[1]) ~= "number" or type(arg[2]) ~= "number" then
+        return
+    end
+    if arg[3] == true then
+        return
+    end -- Native part data carries the authoritative identity.
     local vehicleObj = getVehicleById(arg[1])
     if vehicleObj then
         -- Never overwrite an already known identity with a delayed runtime-ID hint.
         -- Legacy servers without part identities retain their immediate loaded-only hint.
         local data = vehicleObj:getModData()
-        if not data.SQLID or data.SQLID == arg[2] then data.SQLID = arg[2] end
+        if not data.SQLID or data.SQLID == arg[2] then
+            data.SQLID = arg[2]
+        end
     end
 end
 
@@ -340,7 +365,9 @@ function AVCS.ClientEveryHours()
 end
 
 function AVCS.AfterGameStart()
-    if not getPlayer() then return end
+    if not getPlayer() then
+        return
+    end
     Events.OnServerCommand.Add(AVCS.OnServerCommand)
     requestFullSync()
     sendClientCommand(getPlayer(), "AVCS", "updateLastKnownLogonTime", nil)

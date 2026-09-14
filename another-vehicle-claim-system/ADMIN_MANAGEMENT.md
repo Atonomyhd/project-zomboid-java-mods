@@ -32,6 +32,29 @@ This is not a claim that client Java runs through ordinary Lua mod distribution.
 
 ## Validation
 
+Claim-cache recovery now publishes the vehicle and owner indexes together. Partial
+or inconsistent snapshots fail closed and trigger coalesced retries. A generation
+identifier rejects older replies; the server rate-limits full snapshots per player.
+Permission saves send the desired state and wait for a matching server acknowledgment,
+with visible retry after timeout. Revision checks ignore older permission deltas.
+
+Persistent vehicle identity uses the native vehicle-part ModData stream, which
+survives unloading. It does not send generic world-object ModData for vehicles or
+retain delayed runtime-ID assignments. Vehicles without the configured mule part
+retain the legacy loaded-only hint and newly spawned vehicle ModData; verify unusual
+mod vehicles separately. Claim-use authorization remains server-owned.
+
+The map caches group claim metadata and label widths, removes duplicate group markers,
+and culls offscreen labels. Claim revisions, faction/safehouse changes and locale
+changes invalidate it; a two-second fallback catches missed events.
+
+Lua regressions now also cover partial/stale snapshots, permission acknowledgments,
+native vehicle identity and map cache/viewport behavior. These pass in Lua 5.1 and the
+installed game Kahlua interpreter. Current upstream changes, including container
+permission checks, are retained. Local Java validation used installed Storm 2.10.1
+because upstream's Maven 2.10.0 coordinate could not resolve; the substitution lives
+outside the repository and is not a production dependency change.
+
 From the repository root, using Java 25 and `gameDir` in `local.properties`:
 
 ```powershell

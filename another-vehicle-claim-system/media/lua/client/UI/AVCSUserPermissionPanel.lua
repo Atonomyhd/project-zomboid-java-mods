@@ -9,7 +9,9 @@ function AVCS.UI.UserPermissionPanel:initialise()
 end
 
 function AVCS.UI.UserPermissionPanel:close()
-    if self.requestId then pendingPanels[self.requestId] = nil end
+    if self.requestId then
+        pendingPanels[self.requestId] = nil
+    end
     ISPanel.close(self)
 end
 
@@ -21,7 +23,9 @@ function AVCS.UI.UserPermissionPanel:prerender()
         self.btnConfirm:setEnable(true)
         self.btnConfirm:setTitle("Retry")
         self.btnConfirm.tooltip = "No server confirmation received. Retry or reopen to check."
-        for _, box in ipairs(self.chkBox) do box.enable = true end
+        for _, box in ipairs(self.chkBox) do
+            box.enable = true
+        end
     end
 end
 
@@ -30,7 +34,9 @@ function AVCS.UI.UserPermissionPanel:btnCancel_onClick(btn)
 end
 
 function AVCS.UI.UserPermissionPanel:btnConfirm_onClick(btn)
-    if self.requestId or not getPlayer() then return end
+    if self.requestId or not getPlayer() then
+        return
+    end
     if AVCS.Sync and not AVCS.Sync.ready() then
         self.btnConfirm.tooltip = "Claim data is synchronizing. Try again shortly."
         return
@@ -51,9 +57,13 @@ function AVCS.UI.UserPermissionPanel:btnConfirm_onClick(btn)
 end
 
 Events.OnServerCommand.Add(function(module, command, args)
-    if module ~= "AVCS" or command ~= "permissionResult" or not args then return end
+    if module ~= "AVCS" or command ~= "permissionResult" or not args then
+        return
+    end
     local panel = pendingPanels[args.requestId]
-    if not panel or panel.vehicleID ~= args.VehicleID then return end
+    if not panel or panel.vehicleID ~= args.VehicleID then
+        return
+    end
     pendingPanels[args.requestId] = nil
     panel.requestId = nil
     if args.ok then
@@ -61,8 +71,11 @@ Events.OnServerCommand.Add(function(module, command, args)
     else
         panel.btnConfirm:setEnable(true)
         panel.btnConfirm:setTitle("Retry")
-        panel.btnConfirm.tooltip = "Server rejected the change. Check ownership and reopen this panel."
-        for _, box in ipairs(panel.chkBox) do box.enable = true end
+        panel.btnConfirm.tooltip =
+            "Server rejected the change. Check ownership and reopen this panel."
+        for _, box in ipairs(panel.chkBox) do
+            box.enable = true
+        end
     end
 end)
 
