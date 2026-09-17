@@ -5,6 +5,8 @@ import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.Map;
 import java.util.WeakHashMap;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import se.krka.kahlua.integration.annotations.LuaMethod;
 import zombie.characters.Capability;
 import zombie.characters.Faction;
@@ -20,6 +22,7 @@ import zombie.network.packets.INetworkPacket;
 
 /** Server-only adapter. Authorization is repeated here, not delegated to UI visibility. */
 public final class AdminCoreBridge {
+    private static final Logger LOGGER = LoggerFactory.getLogger(AdminCoreBridge.class);
     private static final Map<IsoPlayer, ObserveMove> observeMoves = new WeakHashMap<>();
 
     private AdminCoreBridge() {}
@@ -94,6 +97,10 @@ public final class AdminCoreBridge {
 
     @LuaMethod
     public static String addMember(IsoPlayer actor, String kind, String id, String username) {
+        if (!("safehouse".equals(kind)
+                ? allowed(actor, Capability.CanSetupSafehouses)
+                : "faction".equals(kind) && allowed(actor, Capability.FactionCheat)))
+            return "Permission denied.";
         if (!known(username)) return "Account not found on this server.";
         if ("safehouse".equals(kind)) {
             if (!allowed(actor, Capability.CanSetupSafehouses)) return "Permission denied.";
@@ -114,7 +121,7 @@ public final class AdminCoreBridge {
             faction.addPlayer(username);
             sync(faction);
         } else return "Unknown membership type.";
-        System.out.println(
+        LOGGER.info(
                 "[Universal Admin Core] "
                         + actor.getUsername()
                         + " added "
@@ -145,6 +152,10 @@ public final class AdminCoreBridge {
             String oldOwner,
             String replacement,
             boolean removeOld) {
+        if (!("safehouse".equals(kind)
+                ? allowed(actor, Capability.CanSetupSafehouses)
+                : "faction".equals(kind) && allowed(actor, Capability.FactionCheat)))
+            return "Permission denied.";
         if (!known(replacement) || replacement.equals(oldOwner))
             return "Select a different existing account.";
         if ("safehouse".equals(kind)) {
@@ -170,7 +181,7 @@ public final class AdminCoreBridge {
             else faction.addPlayer(oldOwner);
             sync(faction);
         } else return "Unknown membership type.";
-        System.out.println(
+        LOGGER.info(
                 "[Universal Admin Core] "
                         + actor.getUsername()
                         + " transferred "
@@ -214,7 +225,7 @@ public final class AdminCoreBridge {
         if (house == null) return "The server could not create this safehouse.";
         house.setTitle(title);
         sync(house);
-        System.out.println(
+        LOGGER.info(
                 "[Universal Admin Core] "
                         + actor.getUsername()
                         + " created safehouse "

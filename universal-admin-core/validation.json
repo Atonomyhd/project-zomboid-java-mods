@@ -1,0 +1,6 @@
+{
+  "luaArgs": [
+    "${gameDir}",
+    "${moduleDir}"
+  ]
+}
