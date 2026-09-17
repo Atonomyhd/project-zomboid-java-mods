@@ -88,6 +88,10 @@ tasks.named('luaTest') {
 	requiresGame = true
 	def ui = file('media/lua/client/UI').absolutePath
 	scriptArguments = [
+		'ResizeDrag.lua': [
+			gameDirectory,
+			"${ui}/AVCSWindowSizing.lua"
+		],
 		'ClaimLayout.lua': [
 			"${ui}/AVCSUserManagerMain.lua",
 			"${ui}/AVCSVehicleSizing.lua"

@@ -31,12 +31,7 @@ local function adminLayout(panel)
         panel.textFilterVehicleName,
         unpack(buttons),
     }) do
-        if child.setAnchorRight then
-            child:setAnchorRight(false)
-        end
-        if child.setAnchorBottom then
-            child:setAnchorBottom(false)
-        end
+        T.pin(child)
     end
     local list = panel.listData
     local fontHeight = getTextManager():getFontHeight(UIFont.NewSmall)
@@ -146,10 +141,15 @@ local function userLayout(panel)
 end
 
 local function permissionLayout(panel)
+    for _, control in ipairs({ panel.lblPublicPermissions, panel.btnCancel, panel.btnConfirm }) do
+        T.pin(control)
+    end
     local fontHeight = getTextManager():getFontHeight(UIFont.NewSmall)
     panel.lblPublicPermissions:setY(32)
     panel.lblPublicPermissions:setX(12)
     for i, label in ipairs(panel.lblSet) do
+        T.pin(label)
+        T.pin(panel.chkBox[i])
         local y = 38 + i * (fontHeight + 5)
         label:setY(y)
         panel.chkBox[i]:setY(y)
@@ -157,8 +157,8 @@ local function permissionLayout(panel)
     end
     panel.btnCancel:setX(15)
     panel.btnConfirm:setX(panel.width - panel.btnConfirm.width - 24)
-    panel.btnCancel:setY(panel.height - panel.btnCancel.height - 22)
-    panel.btnConfirm:setY(panel.height - panel.btnConfirm.height - 22)
+    panel.btnCancel:setY(panel.height - panel.btnCancel.height - 32)
+    panel.btnConfirm:setY(panel.height - panel.btnConfirm.height - 32)
 end
 
 local function install()
