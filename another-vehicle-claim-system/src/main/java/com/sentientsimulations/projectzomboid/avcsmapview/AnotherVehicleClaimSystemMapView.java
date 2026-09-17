@@ -47,6 +47,8 @@ public class AnotherVehicleClaimSystemMapView implements ZomboidMod {
                 new LuaEventManagerVehicleRemovePatch(),
                 new BaseVehicleDamageGuardPatch(),
                 new VehicleEnterPacketGuardPatch(),
-                new VehicleSwitchSeatPacketGuardPatch());
+                new VehicleSwitchSeatPacketGuardPatch(),
+                new ItemTransactionPacketGuardPatch(),
+                new RemoveInventoryItemFromContainerPacketGuardPatch());
     }
 }

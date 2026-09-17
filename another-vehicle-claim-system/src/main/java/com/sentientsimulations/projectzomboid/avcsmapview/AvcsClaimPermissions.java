@@ -6,6 +6,7 @@ import zombie.SandboxOptions;
 import zombie.characters.Faction;
 import zombie.characters.IsoPlayer;
 import zombie.config.BooleanConfigOption;
+import zombie.config.StringConfigOption;
 import zombie.iso.areas.SafeHouse;
 import zombie.vehicles.BaseVehicle;
 import zombie.world.moddata.ModData;
@@ -93,5 +94,14 @@ final class AvcsClaimPermissions {
             return bo.getValue();
         }
         return false;
+    }
+
+    static String stringOption(String name) {
+        SandboxOptions.SandboxOption opt = SandboxOptions.instance.getOptionByName(name);
+        if (opt != null && opt.asConfigOption() instanceof StringConfigOption so) {
+            String value = so.getValue();
+            return value == null ? "" : value;
+        }
+        return "";
     }
 }

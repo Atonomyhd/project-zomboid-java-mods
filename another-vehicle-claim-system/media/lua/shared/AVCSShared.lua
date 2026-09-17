@@ -51,6 +51,64 @@ function AVCS.matchTrunkPart(strTrunk)
     return false
 end
 
+-- Vanilla trunk container parts; SandboxVars.AVCS.TrunkParts extends this for modded cargo parts
+local vanillaTrunkContainers = { truckbed = true, truckbedopen = true, trailertrunk = true }
+
+---@param part VehiclePart?
+---@return boolean
+function AVCS.matchTrunkContainerPart(part)
+    if not part then
+        return false
+    end
+    local id = string.lower(part:getId() or "")
+    return vanillaTrunkContainers[id] == true or AVCS.matchTrunkPart(id)
+end
+
+-- Resolves the vehicle (and part) owning a container, walking out of bags nested inside it
+---@param container ItemContainer?
+---@return BaseVehicle?, VehiclePart?
+function AVCS.getVehicleFromContainer(container)
+    if not container then
+        return nil, nil
+    end
+    local outermost = container:getOutermostContainer() or container
+    local part = outermost:getVehiclePart()
+    if part then
+        return part:getVehicle(), part
+    end
+    local parent = outermost:getParent()
+    if parent and instanceof(parent, "BaseVehicle") then
+        ---@cast parent BaseVehicle
+        return parent, nil
+    end
+    return nil, nil
+end
+
+-- Mirrored server-side by VehicleContainerSecurity; keep the two ladders identical
+---@param playerObj IsoGameCharacter
+---@param container ItemContainer?
+---@return boolean
+function AVCS.canAccessVehicleContainer(playerObj, container)
+    local vehicle, part = AVCS.getVehicleFromContainer(container)
+    if not vehicle then
+        return true
+    end
+    -- MP client that has not received the claim DB yet: deny rather than expose every claimed car
+    if isClient() and not AVCS.dbByVehicleSQLID then
+        return false
+    end
+    if AVCS.getSimpleBooleanPermission(AVCS.checkPermission(playerObj, vehicle)) then
+        return true
+    end
+    if
+        AVCS.getPublicPermission(vehicle, "AllowOpeningTrunk")
+        and AVCS.matchTrunkContainerPart(part)
+    then
+        return true
+    end
+    return false
+end
+
 function AVCS.getVehicleID(vehicleObj)
     if vehicleObj:getModData().SQLID then
         return vehicleObj:getModData().SQLID
