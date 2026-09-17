@@ -206,10 +206,7 @@ function AVCS.addOptionToMenuOutsideVehicle(player, context, vehicle)
             toolTip.description = getText("Tooltip_AVCS_Unsupported")
             option.notAvailable = true
         end
-    elseif checkResult.reason == "syncing" then
-        option = context:addOption("Synchronizing vehicle claims...", nil, nil)
-        option.notAvailable = true
-    elseif checkResult.permissions == true then
+    elseif AVCS.checkManagementPermission(player, AVCS.getVehicleID(vehicle)) then
         option = context:addOption(
             getText("ContextMenu_AVCS_UnclaimVehicle"),
             player,
@@ -228,7 +225,7 @@ function AVCS.addOptionToMenuOutsideVehicle(player, context, vehicle)
                 (checkResult.LastKnownLogonTime + (SandboxVars.AVCS.ClaimTimeout * 60 * 60))
             )
         option.notAvailable = false
-    elseif checkResult.permissions == false then
+    else
         option = context:addOption(
             getText("ContextMenu_AVCS_UnclaimVehicle"),
             player,

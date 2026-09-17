@@ -67,7 +67,6 @@ function AVCS.claimVehicle(playerObj, vehicleID)
         sendServerCommand("AVCS", "registerClientVehicleSQLID", {
             vehicleObj:getId(),
             vehicleObj:getModData().SQLID,
-            AVCS.syncVehicleIdentity(vehicleObj),
         })
     end
 
@@ -275,7 +274,14 @@ function AVCS.updateLastKnownLogonTime(playerObj)
 end
 
 function AVCS.updateSpecifyVehicleUserPermission(arg)
-    if type(arg) ~= "table" or arg.VehicleID == nil or type(arg.VehicleID) ~= "number" then
+    if
+        type(arg) ~= "table"
+        or type(arg.VehicleID) ~= "number"
+        or arg.VehicleID ~= arg.VehicleID
+        or arg.VehicleID < 0
+        or arg.VehicleID > 9007199254740991
+        or arg.VehicleID ~= math.floor(arg.VehicleID)
+    then
         return false
     end
 
@@ -296,6 +302,11 @@ function AVCS.updateSpecifyVehicleUserPermission(arg)
         AllowInflatTires = true,
         AllowDeflatTires = true,
     }
+    for field in pairs(arg) do
+        if field ~= "VehicleID" and field ~= "requestId" and not allowedFields[field] then
+            return false
+        end
+    end
     for field in pairs(allowedFields) do
         if arg[field] ~= nil and type(arg[field]) ~= "boolean" then
             return false
@@ -358,17 +369,55 @@ end
 
 -- Send full database tables to a specific client via sendServerCommand
 -- Workaround for broken ModData.request() / OnReceiveGlobalModData in Build 42.15.0
-local lastFullSync = setmetatable({}, { __mode = "k" })
-function AVCS.sendFullSync(playerObj, requestId)
+-- Kahlua does not implement weak Lua tables. Keep only bounded string keys.
+local lastFullSync = {}
+local lastSyncPrune = 0
+function AVCS.sendFullSync(playerObj, requestId, protocol)
     if not playerObj then
         return
     end
     local now = getTimestampMs()
-    local previous = lastFullSync[playerObj]
+    local username = playerObj:getUsername()
+    if type(username) ~= "string" or username == "" then
+        return
+    end
+    local count, oldestKey, oldestTime = 0, nil, math.huge
+    if now < lastSyncPrune or now - lastSyncPrune >= 10000 or not lastFullSync[username] then
+        for key, timestamp in pairs(lastFullSync) do
+            if now < timestamp or now - timestamp >= 60000 then
+                lastFullSync[key] = nil
+            else
+                count = count + 1
+                if timestamp < oldestTime then
+                    oldestKey, oldestTime = key, timestamp
+                end
+            end
+        end
+        if count >= 4096 and not lastFullSync[username] and oldestKey then
+            lastFullSync[oldestKey] = nil
+        end
+        lastSyncPrune = now
+    end
+    local previous = lastFullSync[username]
     if previous and now >= previous and now - previous < 4000 then
         return
     end
-    lastFullSync[playerObj] = now
+    lastFullSync[username] = now
+    if
+        protocol == 3
+        and type(requestId) == "number"
+        and requestId == requestId
+        and requestId >= 1
+        and requestId <= 9007199254740991
+        and requestId == math.floor(requestId)
+    then
+        sendServerCommand(playerObj, "AVCS", "fullSyncSnapshotV3", {
+            requestId = requestId,
+            vehicles = AVCS.dbByVehicleSQLID,
+            players = AVCS.dbByPlayerID,
+        })
+        return
+    end
     if type(requestId) == "number" and requestId == requestId then
         sendServerCommand(
             playerObj,
@@ -480,13 +529,23 @@ end
 
 AVCS.onClientCommand = function(moduleName, command, playerObj, arg)
     if moduleName == "AVCS" and command == "requestFullSync" then
-        AVCS.sendFullSync(playerObj, type(arg) == "table" and arg.requestId or nil)
+        AVCS.sendFullSync(
+            playerObj,
+            type(arg) == "table" and arg.requestId or nil,
+            type(arg) == "table" and arg.protocol or nil
+        )
     elseif moduleName == "AVCS" and command == "claimVehicle" then
         AVCS.claimVehicle(playerObj, arg)
     elseif moduleName == "AVCS" and command == "unclaimVehicle" then
         local id = type(arg) == "table" and arg[1] or nil
         if not AVCS.checkManagementPermission(playerObj, id) then
-            writeLog("AVCS", "Rejected claim management from " .. playerObj:getUsername())
+            AVCS.audit(
+                "Rejected unclaim",
+                playerObj:getUsername(),
+                id,
+                AVCS.dbByVehicleSQLID[id],
+                "[via=owner/admin required]"
+            )
             AVCS.sendFullSync(playerObj)
             return
         end
@@ -506,7 +565,13 @@ AVCS.onClientCommand = function(moduleName, command, playerObj, arg)
             )
         end
         if not permitted then
-            writeLog("AVCS", "Rejected permission management from " .. playerObj:getUsername())
+            AVCS.audit(
+                "Rejected permissions",
+                playerObj:getUsername(),
+                id,
+                AVCS.dbByVehicleSQLID[id],
+                "[via=owner/admin required]"
+            )
             AVCS.sendFullSync(playerObj)
             return
         end
@@ -549,7 +614,6 @@ AVCS.onClientCommand = function(moduleName, command, playerObj, arg)
             sendServerCommand("AVCS", "registerClientVehicleSQLID", {
                 vehicleObj:getId(),
                 vehicleObj:getModData().SQLID,
-                AVCS.syncVehicleIdentity(vehicleObj),
             })
         end
     end

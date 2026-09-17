@@ -11,11 +11,31 @@ local function adminLayout(panel)
         panel.btnUntow,
     }
     if buttons[1] then
-        local top = buttons[1].y
-        local bh = math.min(buttons[1].height, math.floor((panel.height - top - 24 - 10) / 6))
+        panel.avcsAdminButtonTop = panel.avcsAdminButtonTop or buttons[1].y
+        panel.avcsAdminButtonHeight = panel.avcsAdminButtonHeight or buttons[1].height
+        local top = panel.avcsAdminButtonTop
+        local bh = math.max(
+            20,
+            math.min(panel.avcsAdminButtonHeight, math.floor((panel.height - top - 24 - 10) / 6))
+        )
         for i, button in ipairs(buttons) do
             button:setY(top + (i - 1) * (bh + 2))
             button:setHeight(bh)
+        end
+    end
+    for _, child in ipairs({
+        panel.listData,
+        panel.lblFilter,
+        panel.listFilterHeader,
+        panel.textFilterUsername,
+        panel.textFilterVehicleName,
+        unpack(buttons),
+    }) do
+        if child.setAnchorRight then
+            child:setAnchorRight(false)
+        end
+        if child.setAnchorBottom then
+            child:setAnchorBottom(false)
         end
     end
     local list = panel.listData
@@ -172,6 +192,9 @@ local function install()
         class.createChildren = function(self)
             T.fit(self, self.width, self.height)
             original(self)
+            if AVCS.Sync and AVCS.Sync.failed then
+                AVCS.Sync.request(true)
+            end
             if key == "VehiclePermissions" then
                 minH = 100 + 11 * (getTextManager():getFontHeight(UIFont.NewSmall) + 5)
             elseif key == "VehicleClaims" then

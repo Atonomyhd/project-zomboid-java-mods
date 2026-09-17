@@ -184,13 +184,10 @@ function AVCS.registerClientVehicleSQLID(arg)
     if type(arg) ~= "table" or type(arg[1]) ~= "number" or type(arg[2]) ~= "number" then
         return
     end
-    if arg[3] == true then
-        return
-    end -- Native part data carries the authoritative identity.
     local vehicleObj = getVehicleById(arg[1])
     if vehicleObj then
         -- Never overwrite an already known identity with a delayed runtime-ID hint.
-        -- Legacy servers without part identities retain their immediate loaded-only hint.
+        -- The native full vehicle spawn packet also carries vehicle ModData.
         local data = vehicleObj:getModData()
         if not data.SQLID or data.SQLID == arg[2] then
             data.SQLID = arg[2]
@@ -253,7 +250,9 @@ AVCS.OnServerCommand = function(moduleName, command, arg)
         return
     end
 
-    if command == "fullSyncVehicleDBV2" then
+    if command == "fullSyncSnapshotV3" then
+        AVCS.Sync.receiveSnapshot(arg)
+    elseif command == "fullSyncVehicleDBV2" then
         Sync.receive("vehicle", arg.data, arg.requestId)
     elseif command == "fullSyncPlayerDBV2" then
         Sync.receive("player", arg.data, arg.requestId)

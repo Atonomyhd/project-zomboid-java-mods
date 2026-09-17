@@ -8,7 +8,8 @@ import io.pzstorm.storm.util.StormEnv;
 import zombie.Lua.LuaManager;
 
 /**
- * Exposes the server Steam ID API or the client vehicle relocation helper to Lua.
+ * Exposes {@link AvcsSteamIdApi} to the server-Lua VM. Skipped on the client JVM because the caller
+ * â€” the parking-fine command handler â€” only runs server-side.
  *
  * <p>{@link LuaManager.Exposer#exposeLikeJavaRecursively} is a silent no-op for any class that was
  * never passed to {@link LuaManager.Exposer#setExposed(Class)}, so both calls are required.
@@ -20,15 +21,13 @@ public final class AvcsSteamIdApiLuaExposerHandler {
     @SubscribeEvent
     public static void onZomboidGlobalsLoad(OnZomboidGlobalsLoadEvent event) {
         if (!StormEnv.isStormServer()) {
-            LuaManager.exposer.setExposed(AvcsVehicleSync.class);
-            LuaManager.exposer.exposeLikeJavaRecursively(AvcsVehicleSync.class, LuaManager.env);
             return;
         }
         LuaManager.exposer.setExposed(AvcsSteamIdApi.class);
         LuaManager.exposer.exposeLikeJavaRecursively(AvcsSteamIdApi.class, LuaManager.env);
         if (LuaManager.env.rawget("AvcsSteamIdApi") == null) {
             LOGGER.error(
-                    "AvcsSteamIdApi did not land in the server Lua env — parking-fine bypass will"
+                    "AvcsSteamIdApi did not land in the server Lua env â€” parking-fine bypass will"
                             + " fall back to admin-only");
         }
     }

@@ -3,20 +3,20 @@ modInfo {
 	workshopId = '3677939958'
 	workshopIdStage = '3694328666'
 	workshopIdProd = '3672982692'
-	description = '''[h1]Another Vehicle Claim System — Build 42[/h1]
+	description = '''[h1]Another Vehicle Claim System â€” Build 42[/h1]
 Lock down your ride on multiplayer servers. Another Vehicle Claim System (AVCS) lets survivors claim vehicles as their own, so nobody else can drive off, strip the parts, siphon the gas, or loot the trunk of a car that isn't theirs. This is the Build 42 port, maintained by Gus Puffy & NiteMan.
 
 [hr][/hr]
 [url=https://ko-fi.com/guspuffy][img]https://i.imgur.com/NVyFJeG.png[/img][/url]
 
 [h2]Sponsors[/h2]
-[b][url=https://discord.gg/after-the-fall]After The Fall[/url][/b] — The #1 multiplayer server in the world
+[b][url=https://discord.gg/after-the-fall]After The Fall[/url][/b] â€” The #1 multiplayer server in the world
 [hr][/hr]
 
 [h1]Claiming a Vehicle[/h1]
 [list]
 [*]Right-click a vehicle and choose [b]Claim Vehicle[/b] to make it yours.
-[*]Claiming uses a craftable [b]Vehicle Ownership Title[/b] — built from paper, a pen, tape, glue, and paperclips. Requiring a title is optional, and it can be one-time-use or refunded when you unclaim.
+[*]Claiming uses a craftable [b]Vehicle Ownership Title[/b] â€” built from paper, a pen, tape, glue, and paperclips. Requiring a title is optional, and it can be one-time-use or refunded when you unclaim.
 [*]Hold up to a configurable number of claims at once (default 5; admins are unlimited).
 [*]Claim for yourself, your [b]Safehouse[/b], or your [b]Faction[/b] so the right people share access.
 [/list]
@@ -33,14 +33,14 @@ As the owner you decide exactly what everyone else may do with your vehicle. Eac
 [*]Attach or detach for towing
 [*]Inflate or deflate the tires
 [/list]
-Faction and safehouse members can be granted access as a group — each toggleable in the sandbox settings.
+Faction and safehouse members can be granted access as a group â€” each toggleable in the sandbox settings.
 
 [hr][/hr]
 
 [h1]Vehicle Managers[/h1]
 [list]
-[*][b]Claimed Vehicles Manager[/b] — browse your Personal, Safehouse, and Faction vehicles, see each car's owner, last known location, and expiry date, and unclaim or edit permissions from one window.
-[*][b]Admin Vehicles Manager[/b] — staff can search every claim on the server, jump to a claim's safehouse or faction, edit public permissions, or delete a claim outright.
+[*][b]Claimed Vehicles Manager[/b] â€” browse your Personal, Safehouse, and Faction vehicles, see each car's owner, last known location, and expiry date, and unclaim or edit permissions from one window.
+[*][b]Admin Vehicles Manager[/b] â€” staff can search every claim on the server, jump to a claim's safehouse or faction, edit public permissions, or delete a claim outright.
 [/list]
 
 [hr][/hr]
@@ -53,7 +53,7 @@ Claimed vehicles show up as colored markers with name labels on the world map (a
 [h1]Anti-Theft & Anti-Grief[/h1]
 [list]
 [*]Non-owners are blocked from driving, looting, part-stripping, siphoning, and towing claimed vehicles.
-[*]Claimed vehicles can't be towed — or used to tow — which shuts down theft-by-towing.
+[*]Claimed vehicles can't be towed â€” or used to tow â€” which shuts down theft-by-towing.
 [*]Optional server-side verification on claim and unclaim to resist hackers and desync.
 [*]Running a Storm server? AVCS adds an extra server-side guard that blocks unauthorized vehicle-removal commands, using the same owner / faction / safehouse rules.
 [/list]
@@ -83,16 +83,20 @@ Tested and compatible with 42.20.0
 8/21/2026 - Storm servers: admins get a Teleport button in both vehicle managers that brings the selected claimed vehicle to their own position (+2,+2 tiles), loading its area first if needed; admin role is enforced server-side.'''
 }
 
-// B42MP.jar can contain older classes with the same names as the installed game.
-// This module targets the actual projectzomboid.jar, not every jar in gameDir.
-configurations.compileOnly.dependencies.removeAll {
-	it instanceof FileCollectionDependency
-}
-configurations.testImplementation.dependencies.removeAll {
-	it instanceof FileCollectionDependency
-}
-def gameApi = files(layout.buildDirectory.file('zomboid-classpath/projectzomboid.jar')).builtBy('extractZomboidFiles')
-dependencies {
-	compileOnly gameApi
-	testImplementation gameApi
+
+tasks.named('luaTest') {
+	requiresGame = true
+	def ui = file('media/lua/client/UI').absolutePath
+	scriptArguments = [
+		'ClaimLayout.lua': [
+			"${ui}/AVCSUserManagerMain.lua",
+			"${ui}/AVCSVehicleSizing.lua"
+		],
+		'ClaimResize.lua': [
+			gameDirectory,
+			"${ui}/AVCSUserManagerMain.lua",
+			"${ui}/AVCSVehicleSizing.lua",
+			"${ui}/AVCSWindowSizing.lua"
+		]
+	]
 }

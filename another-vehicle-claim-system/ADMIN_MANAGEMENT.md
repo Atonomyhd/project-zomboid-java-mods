@@ -1,74 +1,29 @@
-# AVCS claim management and window fixes
+# ATF vehicle management
 
-These changes belong to AVCS and can be deployed without Universal Admin Core or
-ATF patches. They target Project Zomboid 42.20.4 and use the repository's Storm
-dependency for the Java integration.
+Imported from the existing AVCS contribution with author attribution retained.
+Vehicle use permissions still honor configured faction/safehouse access. Only the
+owner or admin may unclaim or edit public permissions. Unknown permission fields
+or non-boolean values reject the whole request without partially changing the claim.
 
-The claimed-vehicle window supports native drag resizing and a Size dialog. Its
-toolbar, list, labels and preview are repositioned together; narrow windows stack
-the information fields. Resizing back up restores the original proportions.
-Admin and permission windows also receive screen fitting and saved geometry.
+Clients keep their last usable cache during refresh. V3 delivers one snapshot;
+the owner display index is rebuilt from the claim records. Automatic retries stop
+after three attempts. Reopen a vehicle manager to retry after exhaustion. Server
+authorization remains authoritative. Older paired responses remain supported.
 
-Only the owner or an admin may unclaim a vehicle or change its public permissions.
-Shared faction/safehouse access still controls vehicle use. Permission updates
-accept only the ten known boolean fields, validate the whole update before writing,
-and cannot replace ownership metadata. Invalid command payloads and stale vehicle
-IDs are rejected; rebuilding the database tolerates incomplete player records.
+The refresh limiter uses expiring, bounded username entries, never IsoPlayer keys.
+Map caching/culling, admin untow, client index corrections and teleport cancellation
+on disconnect or role loss are retained. Teleport uses the existing native update
+path; no additional client warp helper or part-identity replication is installed.
 
-Admin Untow detaches a currently loaded claimed vehicle through the native tow
-constraint operation. It requires the admin role on the server and logs the action.
-It is Lua-only. It does not load a distant vehicle's area.
+Both vehicle managers remain resizable. Geometry is saved on close and restored on
+reopen, clamped to screen bounds. The native layout.ini persists it across sessions.
 
-The existing Storm admin teleport gains cancellation when the requester disconnects
-or loses the admin role, plus authority/interpolation reset and an AVCS-owned warp
-notification. Its optional client Java helper validates both the runtime vehicle ID
-and persistent claim ID before applying the server position. The server still
-rejects occupied or attached vehicles and retains its existing unloaded-area logic.
+Set gameDir in local.properties. Run ./gradlew :another-vehicle-claim-system:test
+:another-vehicle-claim-system:luaKahluaTest :another-vehicle-claim-system:spotlessCheck.
+Use gradlew.bat on Windows. Install Lua 5.1 or supply -PluaExecutable.
 
-Lua UI, claim permissions and Untow do not require client Java. The explicit
-client physics resynchronization requires Storm and the updated AVCS Java module on
-each client; clients without that helper retain native vehicle synchronization.
-This is not a claim that client Java runs through ordinary Lua mod distribution.
-
-## Validation
-
-Claim-cache recovery now publishes the vehicle and owner indexes together. Partial
-or inconsistent snapshots fail closed and trigger coalesced retries. A generation
-identifier rejects older replies; the server rate-limits full snapshots per player.
-Permission saves send the desired state and wait for a matching server acknowledgment,
-with visible retry after timeout. Revision checks ignore older permission deltas.
-
-Persistent vehicle identity uses the native vehicle-part ModData stream, which
-survives unloading. It does not send generic world-object ModData for vehicles or
-retain delayed runtime-ID assignments. Vehicles without the configured mule part
-retain the legacy loaded-only hint and newly spawned vehicle ModData; verify unusual
-mod vehicles separately. Claim-use authorization remains server-owned.
-
-The map caches group claim metadata and label widths, removes duplicate group markers,
-and culls offscreen labels. Claim revisions, faction/safehouse changes and locale
-changes invalidate it; a two-second fallback catches missed events.
-
-Lua regressions now also cover partial/stale snapshots, permission acknowledgments,
-native vehicle identity and map cache/viewport behavior. These pass in Lua 5.1 and the
-installed game Kahlua interpreter. Current upstream changes, including container
-permission checks, are retained. Local Java validation used installed Storm 2.10.1
-because upstream's Maven 2.10.0 coordinate could not resolve; the substitution lives
-outside the repository and is not a production dependency change.
-
-From the repository root, using Java 25 and `gameDir` in `local.properties`:
-
-```powershell
-.\gradlew.bat :another-vehicle-claim-system:test :another-vehicle-claim-system:spotlessCheck :another-vehicle-claim-system:jar -x :another-vehicle-claim-system:jacocoTestReport
-powershell -NoProfile -ExecutionPolicy Bypass -File another-vehicle-claim-system/Verify-Lua.ps1 -GameDir 'C:/path/to/ProjectZomboid' -Kahlua
-```
-
-The module compiles against the installed `projectzomboid.jar`, excluding unrelated
-shadow classes from `B42MP.jar`. The Lua fixtures cover management rejection,
-layout at different fonts/memberships, native resize/Size callbacks and warp queue
-expiry. The optional Kahlua run uses the game's interpreter with a stub UI backend;
-it does not launch or modify a game.
-
-Before live rollout, validate Untow and permissions with owner, faction member and
-admin accounts. Check resizing visually, then use two clients to verify loaded and
-unloaded vehicle relocation, reconnect and driving after a teleport. Repeat with a
-mod vehicle. Those in-game acceptance checks remain pending.
+Before merging, test owner/guest/faction/safehouse roles on two clients, public
+permission toggles, reconnect and missing-snapshot recovery, map updates, untow,
+teleport cancellation, and window resize/reopen at multiple UI scales. The local
+test runtime differs from the destination repository's declared Storm version;
+fallback build results are reported separately. No production acceptance is claimed.

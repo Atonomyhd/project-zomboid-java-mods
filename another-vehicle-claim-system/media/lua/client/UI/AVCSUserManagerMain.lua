@@ -51,8 +51,9 @@ function AVCS.UI.UserManagerMain:setVehiclePreview(vehicleID)
                 AVCS.dbByVehicleSQLID[vehicleID].LastLocationUpdateDateTime
             )
         )
-        self.btnModify:setEnable(true)
-        self.btnUnclaim:setEnable(true)
+        local canManage = AVCS.checkManagementPermission(getPlayer(), vehicleID)
+        self.btnModify:setEnable(canManage)
+        self.btnUnclaim:setEnable(canManage)
         if self.btnTeleport then
             self.btnTeleport:setEnable(true)
         end

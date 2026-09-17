@@ -21,6 +21,20 @@ function T.fit(window, width, height)
     if window.avcsLayout then
         window:avcsLayout()
     end
+    for _, grip in ipairs({ window.resizeWidget, window.resizeWidget2 }) do
+        grip:setY(window.height - 24)
+        grip:setHeight(24)
+        if grip == window.resizeWidget then
+            grip:setX(window.width - 24)
+            grip:setWidth(24)
+        else
+            grip:setX(0)
+            grip:setWidth(window.width - 24)
+        end
+        if grip.bringToTop then
+            grip:bringToTop()
+        end
+    end
     if window.avcsSizeButton then
         window.avcsSizeButton:setX(window.width - 140)
         window.avcsSizeButton:setY(2)
@@ -50,7 +64,35 @@ function T.sizeDialog(window)
     dialog:addToUIManager()
 end
 
+T.savedGeometry = T.savedGeometry or {}
+local function remember(window)
+    if not window.geometryKey then
+        return
+    end
+    local old = T.savedGeometry[window.geometryKey]
+    if
+        old
+        and old.x == window:getX()
+        and old.y == window:getY()
+        and old.width == window.width
+        and old.height == window.height
+    then
+        return
+    end
+    T.savedGeometry[window.geometryKey] =
+        { x = window:getX(), y = window:getY(), width = window.width, height = window.height }
+    -- Save now, rather than waiting for a world save that may never occur on a client.
+    if ISLayoutManager.OnPostSave then
+        local ok = pcall(ISLayoutManager.OnPostSave)
+        if not ok and not T.layoutWriteFailed then
+            T.layoutWriteFailed = true
+            print("Window layout could not be saved to disk; size is retained for this session.")
+        end
+    end
+end
+
 function T.resizable(window, key, minW, minH, layout)
+    window.geometryKey = key
     window.minimumWidth, window.minimumHeight = minW, minH
     window.avcsLayout = layout
     window.moveWithMouse = true
@@ -87,5 +129,28 @@ function T.resizable(window, key, minW, minH, layout)
         end,
     }
     ISLayoutManager.RegisterWindow("AVCS." .. key, functions, window)
+    local saved = T.savedGeometry[key]
+    if saved then
+        functions.RestoreLayout(window, key, saved)
+    end
+    if not window.geometryCloseWrapped then
+        window.geometryCloseWrapped = true
+        local close = window.close
+        window.close = function(self, ...)
+            remember(self)
+            if close then
+                return close(self, ...)
+            end
+            self:setVisible(false)
+            self:removeFromUIManager()
+        end
+        local remove = window.removeFromUIManager
+        window.removeFromUIManager = function(self, ...)
+            remember(self)
+            if remove then
+                return remove(self, ...)
+            end
+        end
+    end
     T.fit(window, window.width, window.height)
 end
