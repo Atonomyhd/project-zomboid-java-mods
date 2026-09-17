@@ -6,6 +6,10 @@ modInfo {
 
 tasks.named('luaTest') {
 	requiresGame = true
+	scriptArguments = ['ResizeDrag.lua': [
+			gameDirectory,
+			file('media/lua/client/AdminCore/WindowSizing.lua').absolutePath
+		]]
 	defaultArguments = [
 		gameDirectory,
 		projectDir.absolutePath

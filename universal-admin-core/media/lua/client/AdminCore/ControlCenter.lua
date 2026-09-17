@@ -111,6 +111,7 @@ function ISAdminPanelUI:uacRefresh()
     local first = (g.page - 1) * g.pageSize + 1
     for i = first, math.min(#visible, first + g.pageSize - 1) do
         local b = visible[i].button
+        C.pin(b)
         local index = i - first
         b:setX(left + (index % g.columns) * (columnWidth + 10))
         b:setY(108 + math.floor(index / g.columns) * (g.rowHeight + 8))
@@ -124,6 +125,7 @@ function ISAdminPanelUI:uacRefresh()
     end
     local navHeight = math.max(22, math.min(36, math.floor((self.height - 102) / #C.sections) - 5))
     for i, b in ipairs(self.uacNav) do
+        C.pin(b)
         b:setX(12)
         b:setY(72 + (i - 1) * (navHeight + 5))
         b:setWidth(152)
@@ -132,19 +134,22 @@ function ISAdminPanelUI:uacRefresh()
                 and { r = 0.18, g = 0.32, b = 0.42, a = 1 }
             or { r = 0, g = 0, b = 0, a = 0.7 }
     end
+    for _, control in ipairs({ self.uacSearch, self.uacPrevious, self.uacNext, self.cancel }) do
+        C.pin(control)
+    end
     self.uacSearch:setX(left)
     self.uacSearch:setY(42)
     self.uacSearch:setWidth(self.width - left - 24)
     self.uacPrevious:setX(left)
-    self.uacPrevious:setY(self.height - 43)
+    self.uacPrevious:setY(self.height - 32 - self.uacPrevious.height)
     self.uacNext:setX(left + 90)
-    self.uacNext:setY(self.height - 43)
+    self.uacNext:setY(self.height - 32 - self.uacNext.height)
     self.uacPrevious:setWidth(80)
     self.uacNext:setWidth(80)
     self.uacPrevious:setEnable(g.page > 1)
     self.uacNext:setEnable(g.page < g.pages)
     self.cancel:setX(self.width - self.cancel.width - 24)
-    self.cancel:setY(self.height - 43)
+    self.cancel:setY(self.height - 32 - self.cancel.height)
     self.uacHeading = query:match("%S") and "Search results" or self.uacSection
     self.uacSummary = #visible .. " actions  |  Page " .. g.page .. " / " .. g.pages
     self.uacEmpty = #visible == 0
@@ -183,10 +188,10 @@ function ISAdminPanelUI:create()
     end)
     self.uacReady = true
     self.uacDirty = true
+    C.fit(self, math.max(self.width, 960), math.max(self.height, 600))
     C.resizable(self, "ControlCenter", 660, 490, function(p)
         p:uacRefresh()
     end)
-    C.fit(self, math.max(self.width, 960), math.max(self.height, 600))
 end
 
 function ISAdminPanelUI:updateButtons()

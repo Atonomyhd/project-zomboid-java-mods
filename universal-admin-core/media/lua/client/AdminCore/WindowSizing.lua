@@ -8,15 +8,38 @@ require("ISUI/ISRichTextPanel")
 AdminCore = AdminCore or {}
 local T = AdminCore
 
-function T.fit(window, width, height)
+-- Layout-owned controls must not also move in the native deferred anchor pass.
+function T.pin(widget)
+    if not widget then
+        return
+    end
+    for _, axis in ipairs({ "Left", "Top", "Right", "Bottom" }) do
+        local setter = widget["setAnchor" .. axis]
+        if setter then
+            setter(widget, axis == "Left" or axis == "Top")
+        end
+    end
+end
+
+function T.fit(window, width, height, dragging)
     local sw, sh = getCore():getScreenWidth(), getCore():getScreenHeight()
     local maxW, maxH = math.max(100, sw - 16), math.max(100, sh - 16)
+    if dragging then
+        -- Dragging a bottom/right handle must leave the window origin stationary.
+        maxW = math.max(1, sw - window:getX() - 8)
+        maxH = math.max(1, sh - window:getY() - 8)
+    end
+    for _, grip in ipairs({ window.resizeWidget, window.resizeWidget2 }) do
+        T.pin(grip)
+    end
     width = math.min(maxW, math.max(math.min(window.minimumWidth or 400, maxW), width))
     height = math.min(maxH, math.max(math.min(window.minimumHeight or 260, maxH), height))
     window:setWidth(math.floor(width))
     window:setHeight(math.floor(height))
-    window:setX(math.max(8, math.min(window:getX(), sw - width - 8)))
-    window:setY(math.max(8, math.min(window:getY(), sh - height - 8)))
+    if not dragging then
+        window:setX(math.max(8, math.min(window:getX(), sw - width - 8)))
+        window:setY(math.max(8, math.min(window:getY(), sh - height - 8)))
+    end
     if window.uacLayout then
         window:uacLayout()
     end
@@ -38,6 +61,10 @@ function T.fit(window, width, height)
         window.uacSizeButton:setX(window.width - 140)
         window.uacSizeButton:setY(2)
     end
+end
+
+function T.resize(window, width, height)
+    T.fit(window, width, height, true)
 end
 
 function T.sizeDialog(window)
@@ -104,9 +131,9 @@ function T.resizable(window, key, minW, minH, layout)
         window.resizeWidget:initialise()
         window:addChild(window.resizeWidget)
     end
-    window.resizeWidget.resizeFunction = T.fit
+    window.resizeWidget.resizeFunction = T.resize
     if window.resizeWidget2 then
-        window.resizeWidget2.resizeFunction = T.fit
+        window.resizeWidget2.resizeFunction = T.resize
     end
     window.uacSizeButton =
         ISButton:new(window.width - 140, 2, 65, 22, "Size...", window, T.sizeDialog)
@@ -135,13 +162,12 @@ function T.resizable(window, key, minW, minH, layout)
     if not window.geometryCloseWrapped then
         window.geometryCloseWrapped = true
         local close = window.close
-        window.close = function(self, ...)
-            remember(self)
-            if close then
+        -- ISUsersList.close is a button, not a method. Preserve named controls.
+        if type(close) == "function" then
+            window.close = function(self, ...)
+                remember(self)
                 return close(self, ...)
             end
-            self:setVisible(false)
-            self:removeFromUIManager()
         end
         local remove = window.removeFromUIManager
         window.removeFromUIManager = function(self, ...)

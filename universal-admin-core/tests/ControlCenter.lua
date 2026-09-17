@@ -44,7 +44,7 @@ local player = {
 getPlayer = function()
     return player
 end
-local sw, sh, font = 1280, 720, 16
+local sw, sh, font, mx, my = 1280, 720, 16, 0, 0
 getCore = function()
     return {
         getScreenWidth = function()
@@ -115,8 +115,25 @@ for _, name in ipairs({ "X", "Y", "Width", "Height" }) do
         return self[field]
     end
     W["set" .. name] = function(self, value)
+        if name == "Width" or name == "Height" then
+            self["pending" .. name] = (self["pending" .. name] or 0) + value - self[field]
+        end
         self[field] = value
     end
+end
+for _, axis in ipairs({ "Left", "Right", "Top", "Bottom" }) do
+    W["setAnchor" .. axis] = function(self, value)
+        self["anchor" .. axis] = value
+    end
+end
+function W:setCapture(value)
+    self.capture = value
+end
+function W:getMouseX()
+    return mx - self.x - self.parent.x
+end
+function W:getMouseY()
+    return my - self.y - self.parent.y
 end
 function W:getBottom()
     return self.y + self.height
@@ -128,13 +145,15 @@ end
 function W:getChildren()
     return self.children
 end
-function W:initialise() end
+function W:initialise()
+    self.children = self.children or {}
+end
 function W:instantiate() end
 function W:setVisible(value)
     self.visible = value
 end
 function W:getIsVisible()
-    return self.visible
+    return self.visible ~= false
 end
 function W:setEnable(value)
     self.enable = value
@@ -152,7 +171,7 @@ function ISButton:new(x, y, w, h, title, target, onclick)
     b.onclick = onclick
     return b
 end
-ISResizeWidget = W:derive("ISResizeWidget")
+dofile(game .. "/media/lua/client/ISUI/ISResizeWidget.lua")
 ISLayoutManager = { RegisterWindow = function() end }
 ISTextEntryBox = W:derive("ISTextEntryBox")
 function ISTextEntryBox:new(text, x, y, w, h)
@@ -299,4 +318,54 @@ for _, screen in ipairs({ { 1280, 720, 16 }, { 1280, 720, 28 }, { 800, 600, 28 }
     end
     check(reached == 92, "Pagination keeps all native and extension actions reachable")
 end
+-- Exercise the real control-center layout and native mouse handler between
+-- deferred anchor updates, rather than only calling the layout at fixed sizes.
+sw, sh, font = 1600, 1000, 16
+C.fit(p, 960, 600)
+p.pendingWidth, p.pendingHeight = 0, 0
+local grip = p.resizeWidget
+mx, my = p.x + grip.x + 20, p.y + grip.y + 20
+grip:onMouseDown(0, 0)
+for _, delta in ipairs({ { 80, 60 }, { -40, -20 }, { 60, 30 } }) do
+    local width, height = p.width + delta[1], p.height + delta[2]
+    mx, my = mx + delta[1], my + delta[2]
+    grip:onMouseMoveOutside(delta[1], delta[2])
+    for _, child in pairs(p:getChildren()) do
+        if child.anchorRight then
+            if child.anchorLeft then
+                child.width = child.width + (p.pendingWidth or 0)
+            else
+                child.x = child.x + (p.pendingWidth or 0)
+            end
+        end
+        if child.anchorBottom then
+            if child.anchorTop then
+                child.height = child.height + (p.pendingHeight or 0)
+            else
+                child.y = child.y + (p.pendingHeight or 0)
+            end
+        end
+    end
+    p.pendingWidth, p.pendingHeight = 0, 0
+    check(
+        grip.x == width - 24 and grip.y == height - 24,
+        "Admin handle stays on its corner after deferred resize"
+    )
+    check(p.cancel.y + p.cancel.height <= grip.y, "Admin Close button stays above the drag strip")
+    grip:onMouseMoveOutside(0, 0)
+    check(
+        p.width == width and p.height == height,
+        "Admin drag does not jitter with a stationary pointer"
+    )
+end
+grip:onMouseUpOutside(0, 0)
+ISLayoutManager.RegisterWindow = function(_, functions, target)
+    functions.RestoreLayout(target, "ControlCenter", { x = 40, y = 50, width = 800, height = 520 })
+end
+local reopened = ISAdminPanelUI:new(10, 10, 400, 400)
+reopened:create()
+check(
+    reopened.width == 800 and reopened.height == 520,
+    "Admin defaults must not overwrite restored compact geometry"
+)
 print("PASS: " .. count .. " control-center integration/layout checks")

@@ -312,6 +312,16 @@ function ISUsersList:onRightMouse(x, y)
 end
 
 local function usersLayout(panel)
+    for _, control in ipairs({
+        panel.datas,
+        panel.add,
+        panel.bannedIPs,
+        panel.refresh,
+        panel.close,
+        panel.searchEntry,
+    }) do
+        T.pin(control)
+    end
     local w, h = panel.width, panel.height
     local headers = {
         panel.sortByNameButton,
@@ -331,11 +341,12 @@ local function usersLayout(panel)
     panel.lastConnectionColumnX = positions[4]
     panel.warningsColumnX = positions[6]
     for i, header in ipairs(headers) do
+        T.pin(header)
         header:setX(positions[i])
         header:setWidth(positions[i + 1] - positions[i])
     end
     panel.datas:setWidth(w - 22)
-    local bottom = h - panel.add.height - 12
+    local bottom = h - panel.add.height - 32
     panel.datas:setHeight(bottom - panel.datas.y - 45)
     panel.add:setY(bottom)
     panel.bannedIPs:setY(bottom)
@@ -348,10 +359,12 @@ local function usersLayout(panel)
     -- Vanilla creates the filter label and online checkbox as unnamed children.
     for _, child in pairs(panel:getChildren()) do
         if child.Type == "ISLabel" then
+            T.pin(child)
             child:setX(12)
             child:setY(bottom - 32)
         end
         if child.Type == "ISTickBox" then
+            T.pin(child)
             child:setX(360)
             child:setY(bottom - 32)
         end
@@ -515,8 +528,18 @@ function ISUsersList:refresh()
 end
 
 local function inventoryLayout(panel)
+    for _, control in ipairs({
+        panel.datas,
+        panel.no,
+        panel.removeBtn,
+        panel.getItemBtn,
+        panel.addItemBtn,
+        panel.refreshBtn,
+    }) do
+        T.pin(control)
+    end
     panel.datas:setWidth(panel.width - 20)
-    local y = panel.height - panel.no.height - 22
+    local y = panel.height - panel.no.height - 32
     panel.datas:setY(70)
     panel.datas:setHeight(y - 85)
     panel.no:setY(y)
