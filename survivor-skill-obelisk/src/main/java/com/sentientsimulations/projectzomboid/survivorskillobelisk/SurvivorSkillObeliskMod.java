@@ -3,7 +3,6 @@ package com.sentientsimulations.projectzomboid.survivorskillobelisk;
 import static io.pzstorm.storm.logging.StormLogger.LOGGER;
 
 import com.sentientsimulations.projectzomboid.survivorskillobelisk.patch.IsoThumpableGetThumpableForPatch;
-import com.sentientsimulations.projectzomboid.survivorskillobelisk.patch.RemoveItemFromSquarePacketPatch;
 import com.sentientsimulations.projectzomboid.survivorskillobelisk.patch.SledgehammerDestroyPacketPatch;
 import io.pzstorm.storm.core.StormClassTransformer;
 import io.pzstorm.storm.event.core.StormEventDispatcher;
@@ -21,9 +20,7 @@ public class SurvivorSkillObeliskMod implements ZomboidMod {
             return List.of();
         }
         return List.of(
-                new SledgehammerDestroyPacketPatch(),
-                new RemoveItemFromSquarePacketPatch(),
-                new IsoThumpableGetThumpableForPatch());
+                new SledgehammerDestroyPacketPatch(), new IsoThumpableGetThumpableForPatch());
     }
 
     @Override

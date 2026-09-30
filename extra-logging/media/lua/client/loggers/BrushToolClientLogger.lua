@@ -18,6 +18,10 @@ function BrushToolClientLogger.onDestroyTile(obj)
     end
 
     if isClient() then
+        -- sledgeDestroy sends nothing while the server disallows sledgehammer destruction.
+        if not getServerOptions():getBoolean("AllowDestructionBySledgehammer") then
+            return
+        end
         sledgeDestroy(obj)
     else
         obj:getSquare():transmitRemoveItemFromSquare(obj)

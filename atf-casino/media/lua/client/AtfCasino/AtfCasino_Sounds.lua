@@ -123,10 +123,28 @@ local function totalCards(s)
     end
     if s.seats then
         for _, seat in ipairs(s.seats) do
-            n = n + #(seat.cards or {})
+            for _, hand in ipairs(seat.hands or { seat }) do
+                n = n + #(hand.cards or {})
+            end
         end
     end
     return n
+end
+
+-- Best result across a seat's hands, so a split that wins one and loses one still cheers.
+local function seatOutcome(seat)
+    if not seat then
+        return nil
+    end
+    local best = nil
+    local rank = { LOSE = 1, BUST = 1, SURRENDER = 1, PUSH = 2, WIN = 3, BLACKJACK = 4 }
+    for _, hand in ipairs(seat.hands or { seat }) do
+        local o = hand.outcome
+        if o and rank[o] and (not best or rank[o] > rank[best]) then
+            best = o
+        end
+    end
+    return best
 end
 
 local function totalBets(s)
@@ -155,15 +173,14 @@ function S.blackjack(old, new)
     if new.phase == "BETTING" and totalBets(new) > totalBets(old) then
         play("AtfCasinoChipBet")
     end
-    local meOld, meNew = mySeat(old), mySeat(new)
-    local outcome = meNew and meNew.outcome or nil
-    if outcome and outcome ~= (meOld and meOld.outcome or nil) then
+    local outcome = seatOutcome(mySeat(new))
+    if outcome and outcome ~= seatOutcome(mySeat(old)) then
         if outcome == "WIN" or outcome == "BLACKJACK" then
             play("AtfCasinoChipPayout")
             play("AtfCasinoWin")
         elseif outcome == "PUSH" then
             play("AtfCasinoChipBet")
-        elseif outcome == "LOSE" or outcome == "BUST" then
+        elseif outcome == "LOSE" or outcome == "BUST" or outcome == "SURRENDER" then
             play("AtfCasinoLose")
         end
     end

@@ -1,6 +1,8 @@
 package com.sentientsimulations.projectzomboid.extralogging;
 
 import io.pzstorm.storm.event.packet.*;
+import zombie.iso.areas.SafeHouse;
+import zombie.network.fields.Square;
 
 public class SafehouseEventHandler {
 
@@ -8,15 +10,16 @@ public class SafehouseEventHandler {
 
     public static void onSafehouseClaim(SafehouseClaimPacketEvent event) {
         try {
+            Square square = (Square) event.getField("square");
             logger.info(
                     "SafehouseClaim: steamId={}, user={}, player={}, square=(x{},y{},z{}), title={}",
                     event.steamId,
                     event.username,
-                    event.getPlayer().getUsername(),
-                    event.getSquare().getX(),
-                    event.getSquare().getY(),
-                    event.getSquare().getZ(),
-                    event.getTitle());
+                    event.getPacket().getPlayer().getUsername(),
+                    square.getX(),
+                    square.getY(),
+                    square.getZ(),
+                    event.getPacket().getTitle());
         } catch (Exception e) {
             logger.error("Failed to log SafehouseClaim", e);
         }
@@ -24,18 +27,19 @@ public class SafehouseEventHandler {
 
     public static void onSafehouseRelease(SafehouseReleasePacketEvent event) {
         try {
+            SafeHouse safehouse = event.getPacket().getSafehouse();
             logger.info(
                     "SafehouseRelease: steamId={}, user={}, owner={}, zone=({},{},{},{}), title={}, created={}, members=[{}]",
                     event.steamId,
                     event.username,
-                    event.getSafehouse().getOwner(),
-                    event.getSafehouse().getX(),
-                    event.getSafehouse().getY(),
-                    event.getSafehouse().getX2(),
-                    event.getSafehouse().getY2(),
-                    event.getSafehouse().getTitle(),
-                    event.getSafehouse().getDatetimeCreatedStr(),
-                    event.getSafehouse().getPlayers());
+                    safehouse.getOwner(),
+                    safehouse.getX(),
+                    safehouse.getY(),
+                    safehouse.getX2(),
+                    safehouse.getY2(),
+                    safehouse.getTitle(),
+                    safehouse.getDatetimeCreatedStr(),
+                    safehouse.getPlayers());
         } catch (Exception e) {
             logger.error("Failed to log SafehouseRelease", e);
         }
@@ -43,18 +47,19 @@ public class SafehouseEventHandler {
 
     public static void onSafehouseChangeOwner(SafehouseChangeOwnerPacketEvent event) {
         try {
+            SafeHouse safehouse = event.getPacket().getSafehouse();
             logger.info(
                     "SafehouseChangeOwner: steamId={}, user={}, previousOwner={}, newOwner={}, zone=({},{},{},{}), title={}, created={}",
                     event.steamId,
                     event.username,
                     event.getPreviousOwner(),
-                    event.getSafehouse().getOwner(),
-                    event.getSafehouse().getX(),
-                    event.getSafehouse().getY(),
-                    event.getSafehouse().getX2(),
-                    event.getSafehouse().getY2(),
-                    event.getSafehouse().getTitle(),
-                    event.getSafehouse().getDatetimeCreatedStr());
+                    safehouse.getOwner(),
+                    safehouse.getX(),
+                    safehouse.getY(),
+                    safehouse.getX2(),
+                    safehouse.getY2(),
+                    safehouse.getTitle(),
+                    safehouse.getDatetimeCreatedStr());
         } catch (Exception e) {
             logger.error("Failed to log SafehouseChangeOwner", e);
         }
@@ -62,19 +67,20 @@ public class SafehouseEventHandler {
 
     public static void onSafehouseChangeMember(SafehouseChangeMemberPacketEvent event) {
         try {
+            SafeHouse safehouse = event.getPacket().getSafehouse();
             logger.info(
                     "SafehouseChangeMember: steamId={}, user={}, owner={}, removedPlayer={}, wasMember={} zone=({},{},{},{}), title={}, created={}",
                     event.steamId,
                     event.username,
-                    event.getSafehouse().getOwner(),
-                    event.getPlayer(),
+                    safehouse.getOwner(),
+                    event.getPacket().getUsername(),
                     event.wasMember(),
-                    event.getSafehouse().getX(),
-                    event.getSafehouse().getY(),
-                    event.getSafehouse().getX2(),
-                    event.getSafehouse().getY2(),
-                    event.getSafehouse().getTitle(),
-                    event.getSafehouse().getDatetimeCreatedStr());
+                    safehouse.getX(),
+                    safehouse.getY(),
+                    safehouse.getX2(),
+                    safehouse.getY2(),
+                    safehouse.getTitle(),
+                    safehouse.getDatetimeCreatedStr());
         } catch (Exception e) {
             logger.error("Failed to log SafehouseChangeMember", e);
         }
@@ -82,18 +88,19 @@ public class SafehouseEventHandler {
 
     public static void onSafehouseInvite(SafehouseInvitePacketEvent event) {
         try {
+            SafeHouse safehouse = event.getPacket().getSafehouse();
             logger.info(
                     "SafehouseInvite: steamId={}, user={}, owner={}, invitedPlayer={}, zone=({},{},{},{}), title={}, created={}",
                     event.steamId,
                     event.username,
-                    event.getSafehouse().getOwner(),
+                    safehouse.getOwner(),
                     event.getPacket().getUsername(),
-                    event.getSafehouse().getX(),
-                    event.getSafehouse().getY(),
-                    event.getSafehouse().getX2(),
-                    event.getSafehouse().getY2(),
-                    event.getSafehouse().getTitle(),
-                    event.getSafehouse().getDatetimeCreatedStr());
+                    safehouse.getX(),
+                    safehouse.getY(),
+                    safehouse.getX2(),
+                    safehouse.getY2(),
+                    safehouse.getTitle(),
+                    safehouse.getDatetimeCreatedStr());
         } catch (Exception e) {
             logger.error("Failed to log SafehouseInvite", e);
         }
@@ -101,19 +108,20 @@ public class SafehouseEventHandler {
 
     public static void onSafehouseAccept(SafehouseAcceptPacketEvent event) {
         try {
+            SafeHouse safehouse = event.getPacket().getSafehouse();
             logger.info(
                     "SafehouseAccept: steamId={}, user={}, owner={}, invitedPlayer={} accepted={}, zone=({},{},{},{}), title={}, created={}",
                     event.steamId,
                     event.username,
-                    event.getSafehouse().getOwner(),
-                    event.getInvited(),
-                    event.isAccepted(),
-                    event.getSafehouse().getX(),
-                    event.getSafehouse().getY(),
-                    event.getSafehouse().getX2(),
-                    event.getSafehouse().getY2(),
-                    event.getSafehouse().getTitle(),
-                    event.getSafehouse().getDatetimeCreatedStr());
+                    safehouse.getOwner(),
+                    event.getPacket().getUsername(),
+                    event.getField("isAccepted"),
+                    safehouse.getX(),
+                    safehouse.getY(),
+                    safehouse.getX2(),
+                    safehouse.getY2(),
+                    safehouse.getTitle(),
+                    safehouse.getDatetimeCreatedStr());
         } catch (Exception e) {
             logger.error("Failed to log SafehouseAccept", e);
         }
@@ -121,20 +129,21 @@ public class SafehouseEventHandler {
 
     public static void onSafehouseChangeRespawn(SafehouseChangeRespawnPacketEvent event) {
         try {
+            SafeHouse safehouse = event.getPacket().getSafehouse();
             logger.info(
                     "SafehouseChangeRespawn: steamId={}, user={}, owner={}, player={}, addingRespawn={}, wasRespawning={}, zone=({},{},{},{}), title={}, created={}",
                     event.steamId,
                     event.username,
-                    event.getSafehouse().getOwner(),
-                    event.getPlayer(),
-                    event.isAddingRespawn(),
+                    safehouse.getOwner(),
+                    event.getPacket().getUsername(),
+                    Boolean.TRUE.equals(event.getField("doRemove")),
                     event.wasRespawning(),
-                    event.getSafehouse().getX(),
-                    event.getSafehouse().getY(),
-                    event.getSafehouse().getX2(),
-                    event.getSafehouse().getY2(),
-                    event.getSafehouse().getTitle(),
-                    event.getSafehouse().getDatetimeCreatedStr());
+                    safehouse.getX(),
+                    safehouse.getY(),
+                    safehouse.getX2(),
+                    safehouse.getY2(),
+                    safehouse.getTitle(),
+                    safehouse.getDatetimeCreatedStr());
         } catch (Exception e) {
             logger.error("Failed to log SafehouseChangeRespawn", e);
         }
@@ -142,18 +151,19 @@ public class SafehouseEventHandler {
 
     public static void onSafehouseChangeTitle(SafehouseChangeTitlePacketEvent event) {
         try {
+            SafeHouse safehouse = event.getPacket().getSafehouse();
             logger.info(
                     "SafehouseChangeTitle: steamId={}, user={}, owner={}, previousTitle={}, newTitle={}, zone=({},{},{},{}), created={}",
                     event.steamId,
                     event.username,
-                    event.getSafehouse().getOwner(),
+                    safehouse.getOwner(),
                     event.getPreviousTitle(),
-                    event.getTitle(),
-                    event.getSafehouse().getX(),
-                    event.getSafehouse().getY(),
-                    event.getSafehouse().getX2(),
-                    event.getSafehouse().getY2(),
-                    event.getSafehouse().getDatetimeCreatedStr());
+                    event.getField("title"),
+                    safehouse.getX(),
+                    safehouse.getY(),
+                    safehouse.getX2(),
+                    safehouse.getY2(),
+                    safehouse.getDatetimeCreatedStr());
         } catch (Exception e) {
             logger.error("Failed to log SafehouseChangeTitle", e);
         }
@@ -165,12 +175,17 @@ public class SafehouseEventHandler {
                     "SafezoneClaim: steamId={}, user={}, player={}, square=(x{},y{}), title={}",
                     event.steamId,
                     event.username,
-                    event.getPlayer().getUsername(),
-                    event.getX(),
-                    event.getY(),
-                    event.getTitle());
+                    event.getPacket().getPlayer().getUsername(),
+                    intField(event, "x"),
+                    intField(event, "y"),
+                    event.getPacket().getTitle());
         } catch (Exception e) {
             logger.error("Failed to log SafezoneClaim", e);
         }
+    }
+
+    private static int intField(PacketEvent event, String name) {
+        Integer value = (Integer) event.getField(name);
+        return value != null ? value : 0;
     }
 }

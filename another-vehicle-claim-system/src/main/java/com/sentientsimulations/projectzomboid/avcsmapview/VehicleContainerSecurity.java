@@ -10,12 +10,16 @@ import java.util.concurrent.ConcurrentHashMap;
 import se.krka.kahlua.vm.KahluaTable;
 import zombie.Lua.LuaManager;
 import zombie.characters.IsoPlayer;
+import zombie.core.Transaction;
 import zombie.core.logger.LoggerManager;
+import zombie.core.network.ByteBufferWriter;
 import zombie.core.raknet.UdpConnection;
 import zombie.inventory.ItemContainer;
 import zombie.network.GameServer;
+import zombie.network.PacketTypes;
 import zombie.network.fields.ContainerID;
 import zombie.network.fields.character.PlayerID;
+import zombie.network.packets.ItemTransactionPacket;
 import zombie.vehicles.BaseVehicle;
 import zombie.vehicles.VehiclePart;
 
@@ -29,8 +33,8 @@ import zombie.vehicles.VehiclePart;
  *
  * <p>Two packets carry a client's take-out: {@code ItemTransactionPacket} (the request an honest
  * client waits on before moving anything) and {@code RemoveInventoryItemFromContainerPacket} (the
- * removal itself). {@link ItemTransactionPacketGuardPatch} flags a blocked request inconsistent so
- * vanilla sends the normal Reject and the client's action stops cleanly; {@link
+ * removal itself). {@link ItemTransactionPacketGuardPatch} answers a blocked request with the
+ * vanilla Reject and skips {@code processServer}, so the client's action stops cleanly; {@link
  * RemoveInventoryItemFromContainerPacketGuardPatch} drops a blocked removal whole. The offender is
  * told via the {@code AVCS containerBlocked} client command.
  *
@@ -65,28 +69,38 @@ public final class VehicleContainerSecurity {
     }
 
     /**
-     * Marks an {@code ItemTransactionPacket} request inconsistent when any source container is a
-     * claimed vehicle container the requesting player may not take from.
+     * Returns {@code true} when an {@code ItemTransactionPacket} request names a claimed vehicle
+     * container the requesting player may not take from. A blocked request has already been
+     * answered with the same Reject vanilla sends for an inconsistent transaction, so the caller
+     * skips {@code processServer}.
      */
-    public static void rejectTransactionIfBlocked(Object packetObj) {
+    public static boolean rejectTransactionIfBlocked(Object packetObj, UdpConnection connection) {
         try {
             Object state = transactionField(packetObj, "state");
             if (state == null || !"Request".equals(((Enum<?>) state).name())) {
-                return;
+                return false;
             }
             IsoPlayer player = ((PlayerID) transactionField(packetObj, "playerId")).getPlayer();
             List<?> entries = (List<?>) transactionField(packetObj, "entries");
             for (Object entry : entries) {
                 ContainerID sourceId = (ContainerID) field(entry, "sourceId");
                 if (block(player, sourceId.getContainer(), "ItemTransactionPacket")) {
-                    Field consistent = packetObj.getClass().getField("consistent");
-                    consistent.setByte(packetObj, (byte) 1);
-                    return;
+                    sendReject((ItemTransactionPacket) packetObj, connection);
+                    return true;
                 }
             }
         } catch (Throwable t) {
             LOGGER.error("[AVCS] vehicle container guard failed; allowing transaction", t);
         }
+        return false;
+    }
+
+    private static void sendReject(ItemTransactionPacket packet, UdpConnection connection) {
+        packet.setState(Transaction.TransactionState.Reject);
+        ByteBufferWriter bbw = connection.startPacket();
+        PacketTypes.PacketType.ItemTransaction.doPacket(bbw);
+        packet.write(bbw);
+        PacketTypes.PacketType.ItemTransaction.send(connection);
     }
 
     static boolean canAccessContainer(IsoPlayer player, ItemContainer container) {

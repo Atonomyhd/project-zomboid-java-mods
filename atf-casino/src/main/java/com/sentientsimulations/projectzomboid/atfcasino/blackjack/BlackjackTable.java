@@ -1,6 +1,7 @@
 package com.sentientsimulations.projectzomboid.atfcasino.blackjack;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Random;
 import org.jetbrains.annotations.Nullable;
@@ -13,15 +14,22 @@ import org.jetbrains.annotations.Nullable;
  *
  * <p>Round shape: {@link Phase#BETTING} (opens a {@link Limits#betWindowMs()} countdown at the
  * first bet, or starts at once when every seated player has bet) → {@link Phase#PLAYING} (seats act
- * in order, {@link Limits#actionMs()} each, timeout = stand) → dealer draws to 17 (stands on soft
- * 17) and pays → {@link Phase#SETTLE} for {@link Limits#settleMs()} → back to betting. Seated
+ * in order, {@link Limits#actionMs()} per hand, timeout = stand) → dealer draws to 17 (stands on
+ * soft 17) and pays → {@link Phase#SETTLE} for {@link Limits#settleMs()} → back to betting. Seated
  * players who don't bet simply sit the round out. Leaving mid-hand auto-stands; the hand still
  * settles and any payout goes to the seat's recorded identity, so walking away never voids a
  * winning hand.
+ *
+ * <p>Table rules: blackjack pays 3:2, dealer stands on soft 17. Double on any first two cards,
+ * including after a split. A pair (any two ten-value cards count) may be split once; each half gets
+ * one card at once, split aces take exactly one card, and 21 on a split hand pays even money rather
+ * than as a natural. Late surrender on an unsplit first two cards returns half the stake; a dealer
+ * natural is settled before anyone acts, so there is nothing to surrender against.
  */
 public final class BlackjackTable {
 
     public static final int MAX_SEATS = 5;
+    public static final int MAX_HANDS = 2;
     public static final long BET_WINDOW_MS = 20_000L;
     public static final long ACTION_MS = 20_000L;
     public static final long SETTLE_MS = 8_000L;
@@ -38,7 +46,8 @@ public final class BlackjackTable {
         BLACKJACK,
         PUSH,
         LOSE,
-        BUST
+        BUST,
+        SURRENDER
     }
 
     public enum Action {
@@ -52,7 +61,9 @@ public final class BlackjackTable {
         BET_TOO_HIGH,
         BANK_REFUSED,
         NOT_YOUR_TURN,
-        CANNOT_DOUBLE
+        CANNOT_DOUBLE,
+        CANNOT_SPLIT,
+        CANNOT_SURRENDER
     }
 
     /** Result of a player request; {@code detail} carries the bank's refusal reason if any. */
@@ -95,22 +106,71 @@ public final class BlackjackTable {
         }
     }
 
+    /** One wager and the cards played against it. A seat holds two of these after a split. */
+    public static final class PlayerHand {
+        final Hand cards = new Hand();
+        int bet;
+        boolean doubled;
+        boolean stood;
+        boolean split;
+        boolean surrendered;
+        Outcome outcome = Outcome.NONE;
+        int payout;
+
+        public Hand cards() {
+            return cards;
+        }
+
+        public int bet() {
+            return bet;
+        }
+
+        public boolean isDoubled() {
+            return doubled;
+        }
+
+        public boolean isSplit() {
+            return split;
+        }
+
+        public boolean isSurrendered() {
+            return surrendered;
+        }
+
+        public Outcome outcome() {
+            return outcome;
+        }
+
+        public int payout() {
+            return payout;
+        }
+
+        /** Two-card 21 pays 3:2 only when the hand was dealt that way, never after a split. */
+        public boolean isNatural() {
+            return !split && cards.isBlackjack();
+        }
+
+        boolean live() {
+            return bet > 0 && !stood && !surrendered && cards.total() < 21;
+        }
+
+        boolean standing() {
+            return bet > 0 && !surrendered && !cards.isBust() && !isNatural();
+        }
+    }
+
     public static final class Seat {
         final int index;
         final String username;
         final long steamId;
-        final Hand hand = new Hand();
-        int bet;
-        boolean doubled;
-        boolean stood;
+        final List<PlayerHand> hands = new ArrayList<>();
         boolean leaving;
-        Outcome outcome = Outcome.NONE;
-        int payout;
 
         Seat(int index, String username, long steamId) {
             this.index = index;
             this.username = username;
             this.steamId = steamId;
+            hands.add(new PlayerHand());
         }
 
         public int index() {
@@ -125,20 +185,35 @@ public final class BlackjackTable {
             return steamId;
         }
 
-        public int bet() {
-            return bet;
+        public List<PlayerHand> hands() {
+            return Collections.unmodifiableList(hands);
         }
 
+        /** The first hand's cards — the whole seat until it splits. */
         public Hand hand() {
-            return hand;
+            return hands.get(0).cards;
+        }
+
+        /** Total staked across every hand this round. */
+        public int bet() {
+            int total = 0;
+            for (PlayerHand h : hands) {
+                total += h.bet;
+            }
+            return total;
         }
 
         public Outcome outcome() {
-            return outcome;
+            return hands.get(0).outcome;
         }
 
+        /** Total paid out across every hand this round. */
         public int payout() {
-            return payout;
+            int total = 0;
+            for (PlayerHand h : hands) {
+                total += h.payout;
+            }
+            return total;
         }
 
         public boolean isLeaving() {
@@ -146,25 +221,27 @@ public final class BlackjackTable {
         }
 
         boolean inPlay() {
-            return bet > 0;
+            return hands.get(0).bet > 0;
         }
 
         boolean live() {
-            return inPlay() && !stood && !hand.isBust() && !hand.isBlackjack() && hand.total() < 21;
+            for (PlayerHand h : hands) {
+                if (h.live()) {
+                    return true;
+                }
+            }
+            return false;
         }
 
         void reset() {
-            hand.clear();
-            bet = 0;
-            doubled = false;
-            stood = false;
-            outcome = Outcome.NONE;
-            payout = 0;
+            hands.clear();
+            hands.add(new PlayerHand());
         }
     }
 
     private static final String STAKE_REASON = "casino_stake_blackjack";
     private static final String DOUBLE_REASON = "casino_double_blackjack";
+    private static final String SPLIT_REASON = "casino_split_blackjack";
     private static final String PAYOUT_REASON = "casino_payout_blackjack";
     private static final String REFUND_REASON = "casino_refund_blackjack";
 
@@ -177,6 +254,7 @@ public final class BlackjackTable {
     private Phase phase = Phase.BETTING;
     private long deadline;
     private int currentSeat = -1;
+    private int currentHand;
     private boolean holeHidden = true;
     private int round;
     private boolean dirty;
@@ -200,6 +278,13 @@ public final class BlackjackTable {
 
     public int currentSeat() {
         return currentSeat;
+    }
+
+    /**
+     * Index into the acting seat's {@link Seat#hands()}; meaningful only while a seat is acting.
+     */
+    public int currentHand() {
+        return currentHand;
     }
 
     public Hand dealerHand() {
@@ -253,12 +338,26 @@ public final class BlackjackTable {
         return false;
     }
 
-    /** True when the seat may double right now: their turn, first two cards, not yet doubled. */
+    /** True when the seat may double right now: their turn, acting hand on its first two cards. */
     public boolean canDouble(Seat seat) {
-        return phase == Phase.PLAYING
-                && currentSeat == seat.index
-                && seat.hand.size() == 2
-                && !seat.doubled;
+        PlayerHand h = acting(seat);
+        return h != null && h.cards.size() == 2 && !h.doubled;
+    }
+
+    /** True when the acting hand is an unsplit pair (ten-value cards pair with each other). */
+    public boolean canSplit(Seat seat) {
+        PlayerHand h = acting(seat);
+        if (h == null || seat.hands.size() >= MAX_HANDS || h.cards.size() != 2) {
+            return false;
+        }
+        List<Card> c = h.cards.cards();
+        return c.get(0).value() == c.get(1).value();
+    }
+
+    /** True on the seat's first decision of the round: two cards, nothing split or doubled. */
+    public boolean canSurrender(Seat seat) {
+        PlayerHand h = acting(seat);
+        return h != null && seat.hands.size() == 1 && h.cards.size() == 2 && !h.doubled;
     }
 
     /** Drain-and-clear of human-readable events since the last call (for the client's log line). */
@@ -308,14 +407,16 @@ public final class BlackjackTable {
             seat.leaving = true;
             say(username + " leaves the table");
             if (currentSeat == seat.index) {
-                seat.stood = true;
+                for (PlayerHand h : seat.hands) {
+                    h.stood = true;
+                }
                 advance(now);
             }
             return Result.OK;
         }
-        if (phase == Phase.BETTING && seat.bet > 0) {
-            bank.give(seat.username, seat.steamId, seat.bet, REFUND_REASON);
-            seat.bet = 0;
+        if (phase == Phase.BETTING && seat.bet() > 0) {
+            bank.give(seat.username, seat.steamId, seat.bet(), REFUND_REASON);
+            seat.reset();
         }
         seats[seat.index] = null;
         say(username + " leaves the table");
@@ -333,7 +434,7 @@ public final class BlackjackTable {
         if (phase != Phase.BETTING) {
             return Result.of(Action.NOT_BETTING_PHASE);
         }
-        if (seat.bet > 0) {
+        if (seat.inPlay()) {
             return Result.of(Action.ALREADY_BET);
         }
         if (amount < limits.minBet()) {
@@ -346,7 +447,7 @@ public final class BlackjackTable {
         if (refused != null) {
             return new Result(Action.BANK_REFUSED, refused);
         }
-        seat.bet = amount;
+        seat.hands.get(0).bet = amount;
         dirty = true;
         say(username + " bets " + amount);
         if (allSeatedHaveBet()) {
@@ -362,15 +463,16 @@ public final class BlackjackTable {
         if (seat == null) {
             return Result.of(Action.NOT_SEATED);
         }
-        if (phase != Phase.PLAYING || currentSeat != seat.index) {
+        PlayerHand hand = acting(seat);
+        if (hand == null) {
             return Result.of(Action.NOT_YOUR_TURN);
         }
-        seat.hand.add(shoe.draw());
+        hand.cards.add(shoe.draw());
         dirty = true;
-        if (seat.hand.isBust()) {
-            say(username + " busts");
+        if (hand.cards.isBust()) {
+            say(username + handTag(seat) + " busts");
         }
-        if (!seat.live()) {
+        if (!hand.live()) {
             advance(now);
         } else {
             deadline = now + limits.actionMs();
@@ -383,12 +485,13 @@ public final class BlackjackTable {
         if (seat == null) {
             return Result.of(Action.NOT_SEATED);
         }
-        if (phase != Phase.PLAYING || currentSeat != seat.index) {
+        PlayerHand hand = acting(seat);
+        if (hand == null) {
             return Result.of(Action.NOT_YOUR_TURN);
         }
-        seat.stood = true;
+        hand.stood = true;
         dirty = true;
-        say(username + " stands on " + seat.hand.total());
+        say(username + handTag(seat) + " stands on " + hand.cards.total());
         advance(now);
         return Result.OK;
     }
@@ -398,22 +501,87 @@ public final class BlackjackTable {
         if (seat == null) {
             return Result.of(Action.NOT_SEATED);
         }
-        if (phase != Phase.PLAYING || currentSeat != seat.index) {
+        PlayerHand hand = acting(seat);
+        if (hand == null) {
             return Result.of(Action.NOT_YOUR_TURN);
         }
         if (!canDouble(seat)) {
             return Result.of(Action.CANNOT_DOUBLE);
         }
-        String refused = bank.take(seat.username, seat.steamId, seat.bet, DOUBLE_REASON);
+        String refused = bank.take(seat.username, seat.steamId, hand.bet, DOUBLE_REASON);
         if (refused != null) {
             return new Result(Action.BANK_REFUSED, refused);
         }
-        seat.bet *= 2;
-        seat.doubled = true;
-        seat.hand.add(shoe.draw());
-        seat.stood = true;
+        hand.bet *= 2;
+        hand.doubled = true;
+        hand.cards.add(shoe.draw());
+        hand.stood = true;
         dirty = true;
-        say(username + " doubles down" + (seat.hand.isBust() ? " and busts" : ""));
+        say(username + handTag(seat) + " doubles down" + (hand.cards.isBust() ? " and busts" : ""));
+        advance(now);
+        return Result.OK;
+    }
+
+    /**
+     * Split the acting pair into two hands, each staked at the original bet and dealt one card at
+     * once. Split aces stand immediately; anything else plays on from the first hand.
+     */
+    public Result split(String username, long now) {
+        Seat seat = seatOf(username);
+        if (seat == null) {
+            return Result.of(Action.NOT_SEATED);
+        }
+        PlayerHand first = acting(seat);
+        if (first == null) {
+            return Result.of(Action.NOT_YOUR_TURN);
+        }
+        if (!canSplit(seat)) {
+            return Result.of(Action.CANNOT_SPLIT);
+        }
+        String refused = bank.take(seat.username, seat.steamId, first.bet, SPLIT_REASON);
+        if (refused != null) {
+            return new Result(Action.BANK_REFUSED, refused);
+        }
+        PlayerHand second = new PlayerHand();
+        second.bet = first.bet;
+        Card moved = first.cards.removeLast();
+        second.cards.add(moved);
+        first.split = true;
+        second.split = true;
+        seat.hands.add(currentHand + 1, second);
+        first.cards.add(shoe.draw());
+        second.cards.add(shoe.draw());
+        if (moved.isAce()) {
+            first.stood = true;
+            second.stood = true;
+        }
+        dirty = true;
+        say(username + " splits " + (moved.isAce() ? "aces" : "a pair"));
+        if (first.live()) {
+            deadline = now + limits.actionMs();
+        } else {
+            advance(now);
+        }
+        return Result.OK;
+    }
+
+    /** Give up the hand for half the stake back. Only on the seat's first two cards. */
+    public Result surrender(String username, long now) {
+        Seat seat = seatOf(username);
+        if (seat == null) {
+            return Result.of(Action.NOT_SEATED);
+        }
+        PlayerHand hand = acting(seat);
+        if (hand == null) {
+            return Result.of(Action.NOT_YOUR_TURN);
+        }
+        if (!canSurrender(seat)) {
+            return Result.of(Action.CANNOT_SURRENDER);
+        }
+        hand.surrendered = true;
+        hand.stood = true;
+        dirty = true;
+        say(username + " surrenders");
         advance(now);
         return Result.OK;
     }
@@ -436,8 +604,8 @@ public final class BlackjackTable {
                 if (now >= deadline) {
                     Seat seat = currentSeat >= 0 ? seats[currentSeat] : null;
                     if (seat != null) {
-                        seat.stood = true;
-                        say(seat.username + " ran out of time and stands");
+                        seat.hands.get(currentHand).stood = true;
+                        say(seat.username + handTag(seat) + " ran out of time and stands");
                     }
                     dirty = true;
                     advance(now);
@@ -453,9 +621,22 @@ public final class BlackjackTable {
 
     // --- internals ---
 
+    /** The hand this seat is acting on right now, or null when it is not their turn. */
+    private @Nullable PlayerHand acting(Seat seat) {
+        if (phase != Phase.PLAYING || currentSeat != seat.index) {
+            return null;
+        }
+        return seat.hands.get(currentHand);
+    }
+
+    /** Log suffix that names the hand when a seat has split, e.g. {@code " (hand 2)"}. */
+    private String handTag(Seat seat) {
+        return seat.hands.size() > 1 ? " (hand " + (currentHand + 1) + ")" : "";
+    }
+
     private boolean anyBets() {
         for (Seat s : seats) {
-            if (s != null && s.bet > 0) {
+            if (s != null && s.inPlay()) {
                 return true;
             }
         }
@@ -468,7 +649,7 @@ public final class BlackjackTable {
             if (s == null) {
                 continue;
             }
-            if (s.bet <= 0) {
+            if (!s.inPlay()) {
                 return false;
             }
             any = true;
@@ -483,19 +664,20 @@ public final class BlackjackTable {
         holeHidden = true;
         for (Seat s : seats) {
             if (s != null && s.inPlay()) {
-                s.hand.clear();
-                s.hand.add(shoe.draw());
+                s.hand().clear();
+                s.hand().add(shoe.draw());
             }
         }
         dealer.add(shoe.draw());
         for (Seat s : seats) {
             if (s != null && s.inPlay()) {
-                s.hand.add(shoe.draw());
+                s.hand().add(shoe.draw());
             }
         }
         dealer.add(shoe.draw());
         phase = Phase.PLAYING;
         currentSeat = -1;
+        currentHand = 0;
         dirty = true;
         say("Round " + round + ": cards dealt");
         if (dealer.isBlackjack()) {
@@ -506,27 +688,51 @@ public final class BlackjackTable {
         advance(now);
     }
 
+    /** Move to the next live hand: the acting seat's later hands first, then the seats after it. */
     private void advance(long now) {
+        Seat acting = currentSeat >= 0 ? seats[currentSeat] : null;
+        if (acting != null && !acting.leaving) {
+            for (int h = currentHand + 1; h < acting.hands.size(); h++) {
+                if (acting.hands.get(h).live()) {
+                    beginTurn(currentSeat, h, now);
+                    return;
+                }
+            }
+        }
         for (int i = currentSeat + 1; i < MAX_SEATS; i++) {
             Seat s = seats[i];
-            if (s != null && s.live() && !s.leaving) {
-                currentSeat = i;
-                deadline = now + limits.actionMs();
-                dirty = true;
-                return;
+            if (s == null || s.leaving) {
+                continue;
+            }
+            for (int h = 0; h < s.hands.size(); h++) {
+                if (s.hands.get(h).live()) {
+                    beginTurn(i, h, now);
+                    return;
+                }
             }
         }
         currentSeat = -1;
+        currentHand = 0;
         dealerPlay();
         settle(now);
+    }
+
+    private void beginTurn(int seatIndex, int handIndex, long now) {
+        currentSeat = seatIndex;
+        currentHand = handIndex;
+        deadline = now + limits.actionMs();
+        dirty = true;
     }
 
     private void dealerPlay() {
         holeHidden = false;
         boolean anyoneStanding = false;
         for (Seat s : seats) {
-            if (s != null && s.inPlay() && !s.hand.isBust() && !s.hand.isBlackjack()) {
-                anyoneStanding = true;
+            if (s == null) {
+                continue;
+            }
+            for (PlayerHand h : s.hands) {
+                anyoneStanding |= h.standing();
             }
         }
         if (!anyoneStanding) {
@@ -546,32 +752,46 @@ public final class BlackjackTable {
             if (s == null || !s.inPlay()) {
                 continue;
             }
-            int total = s.hand.total();
-            if (s.hand.isBust()) {
-                s.outcome = Outcome.BUST;
-                s.payout = 0;
-            } else if (s.hand.isBlackjack()) {
-                if (dealerBj) {
-                    s.outcome = Outcome.PUSH;
-                    s.payout = s.bet;
+            for (int i = 0; i < s.hands.size(); i++) {
+                PlayerHand h = s.hands.get(i);
+                int total = h.cards.total();
+                if (h.surrendered) {
+                    h.outcome = Outcome.SURRENDER;
+                    h.payout = h.bet / 2;
+                } else if (h.cards.isBust()) {
+                    h.outcome = Outcome.BUST;
+                    h.payout = 0;
+                } else if (h.isNatural()) {
+                    if (dealerBj) {
+                        h.outcome = Outcome.PUSH;
+                        h.payout = h.bet;
+                    } else {
+                        h.outcome = Outcome.BLACKJACK;
+                        h.payout = h.bet + (h.bet * 3) / 2;
+                    }
+                } else if (dealerBj || (!dealerBust && dealerTotal > total)) {
+                    h.outcome = Outcome.LOSE;
+                    h.payout = 0;
+                } else if (dealerBust || total > dealerTotal) {
+                    h.outcome = Outcome.WIN;
+                    h.payout = h.bet * 2;
                 } else {
-                    s.outcome = Outcome.BLACKJACK;
-                    s.payout = s.bet + (s.bet * 3) / 2;
+                    h.outcome = Outcome.PUSH;
+                    h.payout = h.bet;
                 }
-            } else if (dealerBj || (!dealerBust && dealerTotal > total)) {
-                s.outcome = Outcome.LOSE;
-                s.payout = 0;
-            } else if (dealerBust || total > dealerTotal) {
-                s.outcome = Outcome.WIN;
-                s.payout = s.bet * 2;
-            } else {
-                s.outcome = Outcome.PUSH;
-                s.payout = s.bet;
+                if (h.payout > 0) {
+                    bank.give(s.username, s.steamId, h.payout, PAYOUT_REASON);
+                }
+                String tag = s.hands.size() > 1 ? " (hand " + (i + 1) + ")" : "";
+                say(
+                        s.username
+                                + tag
+                                + ": "
+                                + h.outcome.name().toLowerCase()
+                                + " ("
+                                + h.payout
+                                + ")");
             }
-            if (s.payout > 0) {
-                bank.give(s.username, s.steamId, s.payout, PAYOUT_REASON);
-            }
-            say(s.username + ": " + s.outcome.name().toLowerCase() + " (" + s.payout + ")");
         }
         phase = Phase.SETTLE;
         deadline = now + limits.settleMs();
@@ -595,10 +815,15 @@ public final class BlackjackTable {
         phase = Phase.BETTING;
         deadline = 0L;
         currentSeat = -1;
+        currentHand = 0;
         dirty = true;
     }
 
     private void say(String message) {
         log.add(message);
+    }
+
+    Shoe shoe() {
+        return shoe;
     }
 }

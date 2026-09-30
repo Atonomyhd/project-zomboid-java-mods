@@ -6,11 +6,12 @@ import net.bytebuddy.dynamic.ClassFileLocator;
 import net.bytebuddy.dynamic.DynamicType;
 import net.bytebuddy.matcher.ElementMatchers;
 import net.bytebuddy.pool.TypePool;
+import zombie.core.raknet.UdpConnection;
 
 /**
  * Runs {@link VehicleContainerSecurity#rejectTransactionIfBlocked} ahead of {@code
- * zombie.network.packets.ItemTransactionPacket.processServer}. A blocked request is flagged
- * inconsistent, so the untouched vanilla method answers with its normal Reject and the client's
+ * zombie.network.packets.ItemTransactionPacket.processServer}. A blocked request gets the same
+ * Reject vanilla sends for an inconsistent transaction and vanilla is skipped, so the client's
  * transfer action stops instead of moving the item.
  */
 public class ItemTransactionPacketGuardPatch extends StormClassTransformer {
@@ -28,9 +29,10 @@ public class ItemTransactionPacketGuardPatch extends StormClassTransformer {
 
     public static class ProcessServerAdvice {
 
-        @Advice.OnMethodEnter
-        public static void before(@Advice.This Object packet) {
-            VehicleContainerSecurity.rejectTransactionIfBlocked(packet);
+        @Advice.OnMethodEnter(skipOn = Advice.OnNonDefaultValue.class)
+        public static boolean before(
+                @Advice.This Object packet, @Advice.Argument(1) UdpConnection connection) {
+            return VehicleContainerSecurity.rejectTransactionIfBlocked(packet, connection);
         }
     }
 }

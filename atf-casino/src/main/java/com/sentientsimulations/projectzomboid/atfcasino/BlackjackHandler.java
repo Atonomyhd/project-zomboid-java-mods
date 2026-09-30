@@ -4,6 +4,7 @@ import static io.pzstorm.storm.logging.StormLogger.LOGGER;
 
 import com.sentientsimulations.projectzomboid.atfcasino.blackjack.BlackjackTable;
 import com.sentientsimulations.projectzomboid.atfcasino.blackjack.BlackjackTable.Phase;
+import com.sentientsimulations.projectzomboid.atfcasino.blackjack.BlackjackTable.PlayerHand;
 import com.sentientsimulations.projectzomboid.atfcasino.blackjack.BlackjackTable.Result;
 import com.sentientsimulations.projectzomboid.atfcasino.blackjack.BlackjackTable.Seat;
 import com.sentientsimulations.projectzomboid.atfcasino.blackjack.Card;
@@ -130,6 +131,8 @@ public final class BlackjackHandler {
             case "hit" -> result = TABLE.hit(username, now);
             case "stand" -> result = TABLE.stand(username, now);
             case "double" -> result = TABLE.doubleDown(username, now);
+            case "split" -> result = TABLE.split(username, now);
+            case "surrender" -> result = TABLE.surrender(username, now);
             default -> {
                 LOGGER.warn("[AtfCasino] {} sent unknown blackjack action {}", username, action);
                 return;
@@ -258,6 +261,9 @@ public final class BlackjackHandler {
                         && TABLE.currentSeat() == mine.index();
         t.rawset("canAct", myTurn);
         t.rawset("canDouble", mine != null && TABLE.canDouble(mine));
+        t.rawset("canSplit", mine != null && TABLE.canSplit(mine));
+        t.rawset("canSurrender", mine != null && TABLE.canSurrender(mine));
+        t.rawset("currentHand", (double) (TABLE.currentHand() + 1));
 
         KahluaTable dealer = LuaManager.platform.newTable();
         KahluaTable dealerCards = LuaManager.platform.newTable();
@@ -282,20 +288,23 @@ public final class BlackjackHandler {
             st.rawset("index", (double) (s.index() + 1));
             st.rawset("name", s.username());
             st.rawset("bet", (double) s.bet());
-            KahluaTable cards = LuaManager.platform.newTable();
-            List<Card> hc = s.hand().cards();
-            for (int i = 0; i < hc.size(); i++) {
-                cards.rawset(i + 1, hc.get(i).code());
+            boolean turn = TABLE.phase() == Phase.PLAYING && TABLE.currentSeat() == s.index();
+            // Seat-level card fields mirror hand 1 so single-hand readers (sounds) keep working;
+            // "hands" carries every hand once the seat splits.
+            KahluaTable hands = LuaManager.platform.newTable();
+            List<PlayerHand> hl = s.hands();
+            for (int i = 0; i < hl.size(); i++) {
+                KahluaTable ht = buildHand(hl.get(i), turn && TABLE.currentHand() == i);
+                hands.rawset(i + 1, ht);
+                if (i == 0) {
+                    copyHandFields(ht, st);
+                }
             }
-            st.rawset("cards", cards);
-            st.rawset("total", (double) s.hand().total());
-            st.rawset("soft", s.hand().isSoft());
-            st.rawset("blackjack", s.hand().isBlackjack());
-            st.rawset("bust", s.hand().isBust());
-            st.rawset("outcome", s.outcome().name());
+            st.rawset("hands", hands);
             st.rawset("payout", (double) s.payout());
+            st.rawset("activeHand", (double) (turn ? TABLE.currentHand() + 1 : 0));
             st.rawset("leaving", s.isLeaving());
-            st.rawset("isTurn", TABLE.phase() == Phase.PLAYING && TABLE.currentSeat() == s.index());
+            st.rawset("isTurn", turn);
             st.rawset("isYou", s.username().equalsIgnoreCase(me));
             seats.rawset(++n, st);
         }
@@ -307,6 +316,33 @@ public final class BlackjackHandler {
         }
         t.rawset("log", logTable);
         return t;
+    }
+
+    private static KahluaTable buildHand(PlayerHand h, boolean active) {
+        KahluaTable ht = LuaManager.platform.newTable();
+        KahluaTable cards = LuaManager.platform.newTable();
+        List<Card> hc = h.cards().cards();
+        for (int i = 0; i < hc.size(); i++) {
+            cards.rawset(i + 1, hc.get(i).code());
+        }
+        ht.rawset("cards", cards);
+        ht.rawset("bet", (double) h.bet());
+        ht.rawset("total", (double) h.cards().total());
+        ht.rawset("soft", h.cards().isSoft());
+        ht.rawset("blackjack", h.isNatural());
+        ht.rawset("bust", h.cards().isBust());
+        ht.rawset("doubled", h.isDoubled());
+        ht.rawset("surrendered", h.isSurrendered());
+        ht.rawset("outcome", h.outcome().name());
+        ht.rawset("payout", (double) h.payout());
+        ht.rawset("isActive", active);
+        return ht;
+    }
+
+    private static void copyHandFields(KahluaTable from, KahluaTable to) {
+        for (String key : new String[] {"cards", "total", "soft", "blackjack", "bust", "outcome"}) {
+            to.rawset(key, from.rawget(key));
+        }
     }
 
     private static void sendError(IsoPlayer player, String reason, @Nullable String detail) {
