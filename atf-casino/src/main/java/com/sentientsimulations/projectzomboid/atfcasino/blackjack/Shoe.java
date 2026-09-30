@@ -37,6 +37,15 @@ public final class Shoe {
         return cards.size();
     }
 
+    /**
+     * Places {@code next} on top so they come out in that order; a rig for tests and live checks.
+     */
+    void stackNext(List<Card> next) {
+        for (int i = next.size() - 1; i >= 0; i--) {
+            cards.add(next.get(i));
+        }
+    }
+
     private void shuffle() {
         cards.clear();
         for (int d = 0; d < DECKS; d++) {

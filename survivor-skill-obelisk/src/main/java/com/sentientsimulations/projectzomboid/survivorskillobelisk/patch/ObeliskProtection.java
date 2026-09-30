@@ -15,7 +15,6 @@ import zombie.iso.sprite.IsoSprite;
 import zombie.network.PacketTypes;
 import zombie.network.packets.INetworkPacket;
 import zombie.network.packets.RemoveItemFromSquarePacket;
-import zombie.network.packets.SledgehammerDestroyPacket;
 
 /**
  * Server-side policy for obelisk indestructibility. Obelisks may only leave the world through an
@@ -36,49 +35,22 @@ public final class ObeliskProtection {
     public static final Field REMOVE_PACKET_Z_FIELD =
             resolveField(RemoveItemFromSquarePacket.class, "z");
 
-    /** {@code SledgehammerDestroyPacket.packet} is package-private. */
-    public static final Field SLEDGE_INNER_PACKET_FIELD =
-            resolveField(SledgehammerDestroyPacket.class, "packet");
-
     private ObeliskProtection() {}
 
     /**
-     * Entry check for {@code RemoveItemFromSquarePacket.processServer}. Covers direct removal
-     * packets (moveable pickup, scrap/disassemble, modified clients) and — because the sledgehammer
-     * packet delegates here — the second half of the sledgehammer flow.
-     */
-    public static boolean shouldBlockRemoval(Object packetObj, Object connectionObj) {
-        return shouldBlockRemoval(packetObj, connectionObj, false);
-    }
-
-    private static boolean shouldBlockRemoval(
-            Object packetObj, Object connectionObj, boolean sledgehammer) {
-        try {
-            RemoveItemFromSquarePacket packet = (RemoveItemFromSquarePacket) packetObj;
-            if (REMOVE_PACKET_Z_FIELD == null) {
-                return false;
-            }
-            int z = REMOVE_PACKET_Z_FIELD.getByte(packet);
-            return shouldBlock(packet.x, packet.y, z, packet.index, connectionObj, sledgehammer);
-        } catch (Throwable t) {
-            LOGGER.error("[SurvivorSkillObelisk] obelisk removal guard failed; allowing", t);
-            return false;
-        }
-    }
-
-    /**
-     * Entry check for {@code SledgehammerDestroyPacket.processServer}. Blocking here (rather than
-     * relying only on the inner {@code RemoveItemFromSquarePacket} check) also suppresses the
-     * packet's own rebroadcast loop, which would otherwise tell every nearby client to remove the
-     * obelisk even though the server kept it.
+     * Entry check for {@code SledgehammerDestroyPacket.processServer}. The packet extends {@code
+     * RemoveItemFromSquarePacket} and carries the target square and object index itself. Blocking
+     * here also suppresses the packet's rebroadcast, which would otherwise tell every nearby client
+     * to remove the obelisk even though the server kept it.
      */
     public static boolean shouldBlockSledgehammer(Object packetObj, Object connectionObj) {
         try {
-            if (SLEDGE_INNER_PACKET_FIELD == null) {
+            if (REMOVE_PACKET_Z_FIELD == null) {
                 return false;
             }
-            Object inner = SLEDGE_INNER_PACKET_FIELD.get(packetObj);
-            return shouldBlockRemoval(inner, connectionObj, true);
+            RemoveItemFromSquarePacket packet = (RemoveItemFromSquarePacket) packetObj;
+            int z = REMOVE_PACKET_Z_FIELD.getByte(packet);
+            return shouldBlock(packet.x, packet.y, z, packet.index, connectionObj, true);
         } catch (Throwable t) {
             LOGGER.error("[SurvivorSkillObelisk] obelisk sledgehammer guard failed; allowing", t);
             return false;

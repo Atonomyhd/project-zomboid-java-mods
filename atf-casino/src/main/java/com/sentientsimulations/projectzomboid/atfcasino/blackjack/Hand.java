@@ -17,6 +17,11 @@ public final class Hand {
         cards.clear();
     }
 
+    /** Takes the most recently dealt card back off the hand (the half that moves on a split). */
+    public Card removeLast() {
+        return cards.remove(cards.size() - 1);
+    }
+
     public List<Card> cards() {
         return Collections.unmodifiableList(cards);
     }

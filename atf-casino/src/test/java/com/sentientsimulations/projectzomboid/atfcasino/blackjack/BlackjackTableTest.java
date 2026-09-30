@@ -333,6 +333,178 @@ class BlackjackTableTest {
         assertNotNull(table.seatOf("bob"));
     }
 
+    /**
+     * Puts the next cards on top of the shoe in deal order: seat 1, dealer up, seat 1, dealer hole,
+     * ...
+     */
+    private void rig(String... codes) {
+        java.util.List<Card> cards = new java.util.ArrayList<>();
+        for (String code : codes) {
+            String r = code.substring(0, code.length() - 1);
+            int rank = r.equals("10") ? 10 : Card.RANKS.indexOf(r.charAt(0)) + 1;
+            cards.add(new Card(rank, code.charAt(code.length() - 1)));
+        }
+        table.shoe().stackNext(cards);
+    }
+
+    @Test
+    void splitPlaysEachHandInTurnAndPaysEachStake() {
+        bank.fund("alice", 1000);
+        table.sit("alice", 1L);
+        rig("8s", "10h", "8d", "7c", "10c", "10d");
+        table.bet("alice", 100, now);
+        Seat s = table.seatOf("alice");
+        assertTrue(table.canSplit(s));
+        assertTrue(table.canSurrender(s));
+        assertTrue(table.split("alice", now).ok());
+        assertEquals(800, bank.balance.get("alice"));
+        assertEquals(2, s.hands().size());
+        assertEquals(200, s.bet());
+        assertEquals(18, s.hands().get(0).cards().total());
+        assertEquals(18, s.hands().get(1).cards().total());
+        assertEquals(0, table.currentHand());
+        assertFalse(table.canSplit(s));
+        assertFalse(table.canSurrender(s));
+        assertEquals(Action.CANNOT_SURRENDER, table.surrender("alice", now).action());
+        assertTrue(table.stand("alice", now).ok());
+        assertEquals(Phase.PLAYING, table.phase());
+        assertEquals(1, table.currentHand());
+        assertTrue(table.stand("alice", now).ok());
+        assertEquals(Phase.SETTLE, table.phase());
+        assertEquals(17, table.dealerHand().total());
+        assertEquals(Outcome.WIN, s.hands().get(0).outcome());
+        assertEquals(Outcome.WIN, s.hands().get(1).outcome());
+        assertEquals(400, s.payout());
+        assertEquals(1200, bank.balance.get("alice"));
+        assertTrue(table.drainLog().contains("alice (hand 2): win (200)"));
+        table.tick(now + BlackjackTable.SETTLE_MS);
+        assertEquals(1, table.seatOf("alice").hands().size());
+    }
+
+    @Test
+    void splitAcesTakeOneCardEachAndTwentyOneIsNotANatural() {
+        bank.fund("alice", 1000);
+        table.sit("alice", 1L);
+        rig("As", "9h", "Ad", "8c", "Kc", "5d");
+        table.bet("alice", 100, now);
+        assertTrue(table.split("alice", now).ok());
+        Seat s = table.seatOf("alice");
+        assertEquals(Phase.SETTLE, table.phase());
+        assertEquals(21, s.hands().get(0).cards().total());
+        assertFalse(s.hands().get(0).isNatural());
+        assertEquals(Outcome.WIN, s.hands().get(0).outcome());
+        assertEquals(200, s.hands().get(0).payout());
+        assertEquals(Outcome.LOSE, s.hands().get(1).outcome());
+        assertEquals(1000, bank.balance.get("alice"));
+    }
+
+    @Test
+    void splitRules() {
+        bank.fund("alice", 1000);
+        table.sit("alice", 1L);
+        rig("9s", "5h", "8d", "7c");
+        table.bet("alice", 100, now);
+        assertEquals(Action.CANNOT_SPLIT, table.split("alice", now).action());
+        assertEquals(1, table.seatOf("alice").hands().size());
+        table.stand("alice", now);
+        table.tick(now + BlackjackTable.SETTLE_MS);
+
+        // any two ten-value cards pair, but a split hand that pairs again may not resplit
+        rig("Ks", "5h", "10d", "7c", "Qc", "Jd");
+        table.bet("alice", 100, now);
+        Seat s = table.seatOf("alice");
+        assertTrue(table.canSplit(s));
+        assertTrue(table.split("alice", now).ok());
+        assertEquals(20, s.hands().get(0).cards().total());
+        assertFalse(table.canSplit(s));
+        assertEquals(Action.CANNOT_SPLIT, table.split("alice", now).action());
+        assertTrue(table.canDouble(s));
+    }
+
+    @Test
+    void splitRefusedByBankLeavesHandUntouched() {
+        bank.fund("alice", 150);
+        table.sit("alice", 1L);
+        rig("8s", "10h", "8d", "7c");
+        table.bet("alice", 100, now);
+        BlackjackTable.Result r = table.split("alice", now);
+        assertEquals(Action.BANK_REFUSED, r.action());
+        assertEquals("INSUFFICIENT_BALANCE", r.detail());
+        Seat s = table.seatOf("alice");
+        assertEquals(1, s.hands().size());
+        assertEquals(2, s.hand().size());
+        assertEquals(50, bank.balance.get("alice"));
+        assertEquals(Phase.PLAYING, table.phase());
+    }
+
+    @Test
+    void timeoutStandsOnlyTheActingHand() {
+        bank.fund("alice", 1000);
+        table.sit("alice", 1L);
+        rig("8s", "10h", "8d", "7c", "2c", "3d", "2h");
+        table.bet("alice", 100, now);
+        table.split("alice", now);
+        table.tick(now + BlackjackTable.ACTION_MS);
+        assertEquals(Phase.PLAYING, table.phase());
+        assertEquals(1, table.currentHand());
+        assertTrue(table.hit("alice", now).ok());
+        assertEquals(3, table.seatOf("alice").hands().get(1).cards().size());
+        table.tick(now + 2 * BlackjackTable.ACTION_MS);
+        assertEquals(Phase.SETTLE, table.phase());
+    }
+
+    @Test
+    void leavingMidSplitStandsBothHandsAndStillPays() {
+        bank.fund("alice", 1000);
+        bank.fund("bob", 1000);
+        table.sit("alice", 1L);
+        table.sit("bob", 2L);
+        rig("8s", "9h", "10h", "8d", "9d", "7c", "10c", "10d");
+        table.bet("alice", 100, now);
+        table.bet("bob", 100, now);
+        assertTrue(table.split("alice", now).ok());
+        assertTrue(table.leave("alice", now).ok());
+        assertEquals(table.seatOf("bob").index(), table.currentSeat());
+        table.stand("bob", now);
+        assertEquals(Phase.SETTLE, table.phase());
+        Seat alice = table.seatOf("alice");
+        assertEquals(Outcome.WIN, alice.hands().get(0).outcome());
+        assertEquals(Outcome.WIN, alice.hands().get(1).outcome());
+        assertEquals(1200, bank.balance.get("alice"));
+        table.tick(now + BlackjackTable.SETTLE_MS);
+        assertNull(table.seatOf("alice"));
+    }
+
+    @Test
+    void surrenderReturnsHalfTheStakeAndSkipsTheDealer() {
+        bank.fund("alice", 1000);
+        table.sit("alice", 1L);
+        rig("10s", "9h", "6d", "7c");
+        table.bet("alice", 101, now);
+        Seat s = table.seatOf("alice");
+        assertTrue(table.canSurrender(s));
+        assertTrue(table.surrender("alice", now).ok());
+        assertEquals(Phase.SETTLE, table.phase());
+        assertEquals(Outcome.SURRENDER, s.outcome());
+        assertEquals(50, s.payout());
+        assertEquals(949, bank.balance.get("alice"));
+        assertEquals(2, table.dealerHand().size());
+        assertFalse(table.isHoleHidden());
+    }
+
+    @Test
+    void surrenderOnlyOnTheFirstTwoCards() {
+        bank.fund("alice", 1000);
+        table.sit("alice", 1L);
+        rig("10s", "9h", "2d", "7c", "3c");
+        table.bet("alice", 100, now);
+        assertTrue(table.hit("alice", now).ok());
+        assertEquals(Phase.PLAYING, table.phase());
+        assertFalse(table.canSurrender(table.seatOf("alice")));
+        assertEquals(Action.CANNOT_SURRENDER, table.surrender("alice", now).action());
+        assertEquals(Action.CANNOT_DOUBLE, table.doubleDown("alice", now).action());
+    }
+
     @Test
     void handScoring() {
         Hand h = new Hand();

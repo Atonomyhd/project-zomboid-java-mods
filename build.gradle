@@ -7,7 +7,7 @@ plugins {
 	id 'io.freefair.lombok' version '9.5.0' apply false
 }
 
-String stormVersion = '42.20.4_2.10.0'
+String stormVersion = '42.21.0_2.12.0'
 
 def os = OperatingSystem.current()
 def styluaVersion = '2.4.1'
@@ -153,6 +153,9 @@ interface ModInfo {
 	Property<String> getWorkshopIdProd()
 	Property<String> getWorkshopTags()
 
+	// Keeps the workshop item unlisted in every env, including prod.
+	Property<Boolean> getWorkshopUnlisted()
+
 	Property<String> getPack()
 	Property<String> getTiledef()
 
@@ -200,10 +203,9 @@ def greclipseService = gradle.sharedServices.registerIfAbsent('greclipse', Grecl
 
 def env = rootProject.hasProperty('env') ? rootProject.property('env') : 'dev'
 
-def getWorkshopVisibility = {
-	switch (env) {
-		case 'prod':  return '0'
-		default: return '3'
+def getWorkshopVisibility = { info ->
+	info.workshopUnlisted.orElse(false).map { unlisted ->
+		(env == 'prod' && !unlisted) ? '0' : '3'
 	}
 }
 
@@ -214,6 +216,10 @@ def getEnvSuffix = {
 		default: return '-dev'
 	}
 }
+
+// Subproject build scripts cannot call this script's `def` helpers directly
+ext.envSuffix = getEnvSuffix()
+ext.localProperty = { String name, String defaultValue = null -> getLocalProperty(name, defaultValue) }
 
 // steamcmd only persists its refresh token to config.vdf's ConnectCache when the password is NOT on
 // the command line. Supplying it makes every invocation a fresh credential auth, which trips Steam's
@@ -333,7 +339,7 @@ subprojects { subproj ->
 		inputs.property('title', info.workshopTitle.orElse(info.name))
 		inputs.property('description', info.description.orElse(''))
 		inputs.property('tags', info.workshopTags.orElse('Build 42'))
-		inputs.property('visibility', getWorkshopVisibility())
+		inputs.property('visibility', getWorkshopVisibility(info))
 		inputs.property('modId', info.id.orElse("${subproj.name}-b42${getEnvSuffix()}"))
 
 		doLast {
@@ -351,7 +357,7 @@ subprojects { subproj ->
 					"title=${info.workshopTitle.getOrElse(info.name.get())}",
 					"description=${formattedDescription}",
 					"tags=${info.workshopTags.getOrElse('Build 42')}",
-					"visibility=${getWorkshopVisibility()}",
+					"visibility=${inputs.properties['visibility']}",
 			].join('\n')
 		}
 	}
@@ -415,7 +421,7 @@ subprojects { subproj ->
 		inputs.property('publishedfileid', info.workshopId.orElse(''))
 		inputs.property('contentfolder', workshopDir.map { "${it}/Contents" })
 		inputs.property('previewfile', workshopDir.map { "${it}/preview.png" })
-		inputs.property('visibility', getWorkshopVisibility())
+		inputs.property('visibility', getWorkshopVisibility(info))
 		inputs.property('title', info.workshopTitle.orElse(info.name))
 		inputs.property('description', info.description.orElse(''))
 		inputs.property('modId', info.id.orElse("${subproj.name}-b42${getEnvSuffix()}"))

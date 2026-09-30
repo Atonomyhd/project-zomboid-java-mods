@@ -36,6 +36,10 @@ local HGT_LARGE = getTextManager():getFontHeight(FONT_LARGE)
 local CARD_W, CARD_H = 100, 135
 local CARD_STEP = CARD_W + 12
 local FAN_STEP = 56
+-- A split seat shows two hands side by side at a smaller scale.
+local SPLIT_CARD_W, SPLIT_CARD_H = 72, 97
+local SPLIT_FAN_STEP = 28
+local SPLIT_GAP = 8
 local PAD = 16
 local SEAT_W, SEAT_GAP, SEAT_PAD = 244, 12, 12
 local SEAT_H = SEAT_PAD
@@ -147,7 +151,8 @@ function AtfCasinoBlackjackWindow:createChildren()
     self.seatsY = self.dealerY + DEALER_H + 18
     self.logY = self.seatsY + SEAT_H + 16
     self.buttonsY = self.logY + LOG_H + 16
-    self:setHeight(self.buttonsY + BTN_H + PAD)
+    self.actionsY = self.buttonsY + BTN_H + BTN_GAP
+    self:setHeight(self.actionsY + BTN_H + PAD)
 
     local y = self.buttonsY
     local x = PAD
@@ -173,8 +178,9 @@ function AtfCasinoBlackjackWindow:createChildren()
     x = x + QUICK_W + BTN_GAP
     self.betBtn =
         self:addButton(x, y, BTN_W, txt("IGUI_AtfCasino_Blackjack_Bet", "Bet"), self.onBet)
-    x = x + BTN_W + GROUP_GAP
 
+    y = self.actionsY
+    x = PAD
     self.hitBtn =
         self:addButton(x, y, BTN_W, txt("IGUI_AtfCasino_Blackjack_Hit", "Hit"), self.onHit)
     x = x + BTN_W + BTN_GAP
@@ -183,7 +189,31 @@ function AtfCasinoBlackjackWindow:createChildren()
     x = x + BTN_W + BTN_GAP
     self.doubleBtn =
         self:addButton(x, y, BTN_W, txt("IGUI_AtfCasino_Blackjack_Double", "Double"), self.onDouble)
+    x = x + BTN_W + BTN_GAP
+    self.splitBtn =
+        self:addButton(x, y, BTN_W, txt("IGUI_AtfCasino_Blackjack_Split", "Split"), self.onSplit)
+    x = x + BTN_W + BTN_GAP
+    self.surrenderBtn = self:addButton(
+        x,
+        y,
+        BTN_W,
+        txt("IGUI_AtfCasino_Blackjack_Surrender", "Surrender"),
+        self.onSurrender
+    )
+    self.surrenderBtn:setTooltip(
+        txt(
+            "IGUI_AtfCasino_Blackjack_SurrenderTip",
+            "Fold your first two cards and get half your bet back."
+        )
+    )
+    self.splitBtn:setTooltip(
+        txt(
+            "IGUI_AtfCasino_Blackjack_SplitTip",
+            "Play a pair as two hands. Costs a second bet equal to the first."
+        )
+    )
 
+    y = self.buttonsY
     self.closeBtn = self:addButton(
         self.width - BTN_W - PAD,
         y,
@@ -255,6 +285,14 @@ function AtfCasinoBlackjackWindow:onDouble()
     send("double")
 end
 
+function AtfCasinoBlackjackWindow:onSplit()
+    send("split")
+end
+
+function AtfCasinoBlackjackWindow:onSurrender()
+    send("surrender")
+end
+
 function AtfCasinoBlackjackWindow:close()
     if not self.closing then
         self.closing = true
@@ -305,6 +343,8 @@ function AtfCasinoBlackjackWindow:refreshButtons()
     self.hitBtn:setEnable(s ~= nil and s.canAct == true)
     self.standBtn:setEnable(s ~= nil and s.canAct == true)
     self.doubleBtn:setEnable(s ~= nil and s.canAct == true and s.canDouble == true)
+    self.splitBtn:setEnable(s ~= nil and s.canAct == true and s.canSplit == true)
+    self.surrenderBtn:setEnable(s ~= nil and s.canAct == true and s.canSurrender == true)
 end
 
 function AtfCasinoBlackjackWindow:secondsLeft()
@@ -315,8 +355,8 @@ function AtfCasinoBlackjackWindow:secondsLeft()
     return math.max(0, math.floor((self.state.secondsLeft or 0) - elapsed + 0.999))
 end
 
-function AtfCasinoBlackjackWindow:drawCard(x, y, code)
-    local w, h = CARD_W, CARD_H
+function AtfCasinoBlackjackWindow:drawCard(x, y, code, w, h)
+    w, h = w or CARD_W, h or CARD_H
     local hidden = code == "??"
     self:drawRect(x + 3, y + 3, w, h, 0.45, 0, 0, 0)
     local tex = cardTexture(hidden and BACK_TEXTURE or code)
@@ -353,6 +393,36 @@ local function outcomeLabel(o)
         return "LOSE", 1, 0.4, 0.4
     elseif o == "BUST" then
         return "BUST", 1, 0.3, 0.3
+    elseif o == "SURRENDER" then
+        return "SURRENDER", 0.75, 0.7, 0.55
+    end
+    return nil
+end
+
+local function totalText(hand)
+    local total = tostring(math.floor(hand.total or 0))
+    if hand.soft and not hand.bust then
+        total = total .. " " .. txt("IGUI_AtfCasino_Blackjack_Soft", "(soft)")
+    end
+    return total
+end
+
+-- Outcome, or the interim state of a hand still in play; nil when there is nothing to say.
+local function handStatus(hand, seat)
+    local label, r, g, b = outcomeLabel(hand.outcome)
+    if hand.bust and not label then
+        return "BUST", 1, 0.3, 0.3
+    end
+    if label then
+        if (hand.payout or 0) > 0 then
+            label = label .. "  +" .. fmt(hand.payout)
+        end
+        return label, r, g, b
+    end
+    if seat.leaving then
+        return txt("IGUI_AtfCasino_Blackjack_Leaving", "leaving"), 0.7, 0.7, 0.7
+    elseif hand.isActive then
+        return txt("IGUI_AtfCasino_Blackjack_Thinking", "thinking..."), 1, 0.85, 0.2
     end
     return nil
 end
@@ -362,6 +432,74 @@ function AtfCasinoBlackjackWindow:drawPanel(x, y, w, h, r, g, b, a, br, bg, bb, 
     self:drawRectBorder(x, y, w, h, 1, br, bg, bb)
     if thick then
         self:drawRectBorder(x + 1, y + 1, w - 2, h - 2, 1, br, bg, bb)
+    end
+end
+
+function AtfCasinoBlackjackWindow:drawSingleHand(seat, hand, tx, ty)
+    local cards = hand.cards or {}
+    local n = #cards
+    local step = FAN_STEP
+    local avail = SEAT_W - SEAT_PAD * 2 - CARD_W
+    if n > 1 and step * (n - 1) > avail then
+        step = avail / (n - 1)
+    end
+    for k, code in ipairs(cards) do
+        self:drawCard(tx + (k - 1) * step, ty, code)
+    end
+    ty = ty + CARD_H + 10
+    if (hand.total or 0) > 0 then
+        self:drawText(totalText(hand), tx, ty, 1, 1, 1, 1, FONT_MEDIUM)
+    end
+    ty = ty + HGT_MEDIUM
+    local label, r, g, b = handStatus(hand, seat)
+    if label then
+        self:drawText(label, tx, ty, r, g, b, 1, FONT_MEDIUM)
+    end
+end
+
+-- Two hands share the seat panel: each gets half the width, smaller cards, and its own total
+-- and result underneath. The hand being played is boxed in gold.
+function AtfCasinoBlackjackWindow:drawSplitHands(seat, hands, tx, ty)
+    local inner = SEAT_W - SEAT_PAD * 2
+    local colW = math.floor((inner - SPLIT_GAP * (#hands - 1)) / #hands)
+    local textH = HGT_SMALL * 2 + 4
+    for i, hand in ipairs(hands) do
+        local cx = tx + (i - 1) * (colW + SPLIT_GAP)
+        if hand.isActive then
+            self:drawRectBorder(
+                cx - 3,
+                ty - 3,
+                colW + 6,
+                SPLIT_CARD_H + textH + 12,
+                1,
+                1,
+                0.85,
+                0.2
+            )
+        end
+        local cards = hand.cards or {}
+        local n = #cards
+        local step = SPLIT_FAN_STEP
+        local avail = colW - SPLIT_CARD_W
+        if n > 1 and step * (n - 1) > avail then
+            step = avail / (n - 1)
+        end
+        for k, code in ipairs(cards) do
+            self:drawCard(cx + (k - 1) * step, ty, code, SPLIT_CARD_W, SPLIT_CARD_H)
+        end
+        local ly = ty + SPLIT_CARD_H + 6
+        if (hand.total or 0) > 0 then
+            local totalLine = totalText(hand)
+            if (hand.bet or 0) > 0 then
+                totalLine = totalLine .. "   " .. fmt(hand.bet)
+            end
+            self:drawText(totalLine, cx, ly, 1, 1, 1, 1, FONT_SMALL)
+        end
+        ly = ly + HGT_SMALL + 2
+        local label, r, g, b = handStatus(hand, seat)
+        if label then
+            self:drawText(label, cx, ly, r, g, b, 1, FONT_SMALL)
+        end
     end
 end
 
@@ -524,8 +662,12 @@ function AtfCasinoBlackjackWindow:render()
                 FONT_SMALL
             )
             ty = ty + HGT_MEDIUM
+            local hands = seat.hands or {}
             local betLine
-            if (seat.bet or 0) > 0 then
+            if #hands > 1 then
+                betLine =
+                    txt("IGUI_AtfCasino_Blackjack_SplitBet", "Bet %1 - split", fmt(seat.bet or 0))
+            elseif (seat.bet or 0) > 0 then
                 betLine = txt("IGUI_AtfCasino_Blackjack_SeatBet", "Bet %1", fmt(seat.bet))
             else
                 betLine = txt("IGUI_AtfCasino_Blackjack_NoBet", "No bet yet")
@@ -533,58 +675,10 @@ function AtfCasinoBlackjackWindow:render()
             self:drawText(betLine, tx, ty, 0.95, 0.9, 0.55, 1, FONT_SMALL)
             ty = ty + HGT_SMALL + 10
 
-            local cards = seat.cards or {}
-            local n = #cards
-            local step = FAN_STEP
-            local avail = SEAT_W - SEAT_PAD * 2 - CARD_W
-            if n > 1 and step * (n - 1) > avail then
-                step = avail / (n - 1)
-            end
-            for k, code in ipairs(cards) do
-                self:drawCard(tx + (k - 1) * step, ty, code)
-            end
-            ty = ty + CARD_H + 10
-
-            if (seat.total or 0) > 0 then
-                local total = tostring(math.floor(seat.total))
-                if seat.soft and not seat.bust then
-                    total = total .. " " .. txt("IGUI_AtfCasino_Blackjack_Soft", "(soft)")
-                end
-                self:drawText(total, tx, ty, 1, 1, 1, 1, FONT_MEDIUM)
-            end
-            ty = ty + HGT_MEDIUM
-            local label, r, g, b = outcomeLabel(seat.outcome)
-            if seat.bust and not label then
-                label, r, g, b = "BUST", 1, 0.3, 0.3
-            end
-            if label then
-                local extra = ""
-                if (seat.payout or 0) > 0 then
-                    extra = "  +" .. fmt(seat.payout)
-                end
-                self:drawText(label .. extra, tx, ty, r, g, b, 1, FONT_MEDIUM)
-            elseif seat.leaving then
-                self:drawText(
-                    txt("IGUI_AtfCasino_Blackjack_Leaving", "leaving"),
-                    tx,
-                    ty,
-                    0.7,
-                    0.7,
-                    0.7,
-                    1,
-                    FONT_MEDIUM
-                )
-            elseif seat.isTurn then
-                self:drawText(
-                    txt("IGUI_AtfCasino_Blackjack_Thinking", "thinking..."),
-                    tx,
-                    ty,
-                    1,
-                    0.85,
-                    0.2,
-                    1,
-                    FONT_MEDIUM
-                )
+            if #hands > 1 then
+                self:drawSplitHands(seat, hands, tx, ty)
+            else
+                self:drawSingleHand(seat, hands[1] or seat, tx, ty)
             end
         else
             self:drawText(seatTag, tx, ty, 0.55, 0.55, 0.55, 1, FONT_MEDIUM)
@@ -652,6 +746,8 @@ local ERROR_TEXT = {
     INSUFFICIENT_BALANCE = "You don't have enough Scraps",
     NOT_YOUR_TURN = "It's not your turn",
     CANNOT_DOUBLE = "You can only double on your first two cards",
+    CANNOT_SPLIT = "You can only split a pair, once",
+    CANNOT_SURRENDER = "You can only surrender on your first two cards",
     PLAYER_OFFLINE = "Could not reach your account",
     DEAD = "The dealer doesn't deal to the dead",
 }

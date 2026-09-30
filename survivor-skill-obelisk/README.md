@@ -56,14 +56,13 @@ direct Java calls (`transmitRemoveItemFromSquare`, `pickUpMoveableViaCursor`,
 consults `SurvivorSkillObeliskApi` (exposed to server Lua by
 `SurvivorSkillObeliskApiLuaExposerHandler`) for the role policy, resync, and curse.
 
-Three server-only Storm patches back this up against forged packets and the legacy client path:
+Two server-only Storm patches back this up against forged packets:
 
 - **`SledgehammerDestroyPacketPatch`** — skips `processServer` for obelisk targets unless the
   sender has the brush-tool capability. Brush-tool "Destroy tile" sends this same packet, so the
   sender's *role* is what separates admin deletes from player sledgehammers. Blocking at this
-  layer also suppresses the packet's rebroadcast loop (which runs even when the inner remove is
-  skipped and would ghost the obelisk on every nearby client).
-- **`RemoveItemFromSquarePacketPatch`** — same gate on the generic removal packet.
+  layer also suppresses the packet's rebroadcast, which would ghost the obelisk on every nearby
+  client.
 - **`IsoThumpableGetThumpableForPatch`** — returns null from `getThumpableFor` for obelisks, so
   zombies path around them instead of thumping and player `WeaponHit` no-ops server-side.
 

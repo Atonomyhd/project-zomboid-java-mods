@@ -17,7 +17,6 @@ import io.pzstorm.storm.event.zomboid.OnPlayerLeaveWorldEvent;
 import io.pzstorm.storm.mod.ZomboidMod;
 import io.pzstorm.storm.util.StormEnv;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 
 public class ExtraLoggingMod implements ZomboidMod {
@@ -34,7 +33,11 @@ public class ExtraLoggingMod implements ZomboidMod {
     @Override
     public List<StormClassTransformer> getClassTransformers() {
         if (!StormEnv.isStormServer()) {
-            return Collections.emptyList();
+            return List.of(
+                    new PvpShotIdleStatePatch(),
+                    new PvpShotDoAttackPatch(),
+                    new PvpShotCombatManagerPatch(),
+                    new PvpShotAimResetPatch());
         }
 
         List<StormClassTransformer> transformers = new ArrayList<>();
@@ -45,6 +48,9 @@ public class ExtraLoggingMod implements ZomboidMod {
         transformers.add(new VehicleManagerPatch());
         transformers.add(new VehiclesDB2Patch());
         transformers.add(new IsoAnimalPatch());
+        transformers.add(new PvpHitParsePatch());
+        transformers.add(new PvpHitProcessPatch());
+        transformers.add(new PvpHitBodyDamagePatch());
 
         return transformers;
     }
@@ -93,11 +99,6 @@ public class ExtraLoggingMod implements ZomboidMod {
     @SubscribeEvent
     public void onPlayerDropHeldItems(PlayerDropHeldItemsPacketEvent event) {
         ItemEventHandler.onPlayerDropHeldItems(event);
-    }
-
-    @SubscribeEvent
-    public void onRemoveItemFromSquare(RemoveItemFromSquarePacketEvent event) {
-        ItemEventHandler.onRemoveItemFromSquare(event);
     }
 
     @SubscribeEvent

@@ -7,6 +7,7 @@ import java.lang.reflect.Field;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
+import se.krka.kahlua.vm.KahluaTable;
 import se.krka.kahlua.vm.KahluaTableIterator;
 import zombie.characters.IsoPlayer;
 import zombie.inventory.InventoryItem;
@@ -18,6 +19,9 @@ import zombie.network.PZNetKahluaNull;
 import zombie.network.PZNetKahluaTableImpl;
 import zombie.network.fields.ContainerID;
 import zombie.network.fields.NetObject;
+import zombie.network.fields.character.PlayerID;
+import zombie.network.packets.NetTimedActionPacket;
+import zombie.network.packets.SledgehammerDestroyPacket;
 import zombie.scripting.entity.components.crafting.CraftRecipe;
 import zombie.vehicles.BaseVehicle;
 import zombie.vehicles.VehiclePart;
@@ -128,12 +132,10 @@ public class ItemEventHandler {
      * never processed by the server anymore.
      *
      * <p>Fires after {@code processServer}, so {@code state} is the server's verdict: {@code
-     * Accept} for a validated request, {@code Reject} for a failed one ({@code consistent} carries
-     * the validation failure code, 0 = valid) or a client-side cancel.
+     * Accept} for a validated request, {@code Reject} for a failed one or a client-side cancel.
      */
     public static void onItemTransaction(ItemTransactionPacketEvent event) {
         try {
-            byte consistent = event.getPacket().consistent;
             Object state = event.getField("state");
             Object extra = event.getField("extra");
             List<?> entries = (List<?>) event.getField("entries");
@@ -145,12 +147,11 @@ public class ItemEventHandler {
                                     .collect(Collectors.joining("; "));
 
             itemsLogger.info(
-                    "{}: steamId={}, user={}, state={}, consistent={}, extra={}, entries=[{}]",
+                    "{}: steamId={}, user={}, state={}, extra={}, entries=[{}]",
                     event.getName(),
                     event.steamId,
                     event.username,
                     state,
-                    consistent,
                     extra,
                     entryLog);
         } catch (Exception e) {
@@ -215,30 +216,35 @@ public class ItemEventHandler {
      */
     public static void onNetTimedAction(NetTimedActionPacketEvent event) {
         try {
-            String actionType = event.getActionType();
+            NetTimedActionPacket packet = event.getPacket();
+            String actionType = packet.type;
             String extraLog = "";
             try {
-                if (event.getPacket().action == null) {
+                if (packet.action == null) {
                     extraLog =
                             ", rejected=server-constructor-failed, args={%s}"
-                                    .formatted(describeArgs(event.getActionArgs()));
+                                    .formatted(
+                                            describeArgs(
+                                                    (PZNetKahluaTableImpl)
+                                                            event.getField("actionArgs")));
                 } else {
-                    extraLog = describeAction(actionType, event.getAction());
+                    extraLog = describeAction(actionType, new StormKahluaTable(packet.action));
                 }
             } catch (Exception e) {
                 loggerFor(actionType)
                         .error("Unable to add extraLog information to {}", actionType, e);
             }
 
+            PlayerID playerId = (PlayerID) event.getField("playerId");
             loggerFor(actionType)
                     .info(
                             "{}: steamId={}, user={}, pos=({},{},{}), state={}, actionType={}{}",
                             event.getName(),
                             event.steamId,
                             event.username,
-                            event.getPlayerId().getX(),
-                            event.getPlayerId().getY(),
-                            event.getPlayerId().getZ(),
+                            playerId.getX(),
+                            playerId.getY(),
+                            playerId.getZ(),
                             event.getField("state"),
                             actionType,
                             extraLog);
@@ -445,43 +451,28 @@ public class ItemEventHandler {
                     event.getName(),
                     event.steamId,
                     event.username,
-                    event.getX(),
-                    event.getY(),
-                    event.getZ(),
-                    event.isHeavy(),
-                    event.isThrow());
+                    event.getField("x"),
+                    event.getField("y"),
+                    event.getField("z"),
+                    event.getField("heavy"),
+                    event.getField("isThrow"));
         } catch (Exception e) {
             itemsLogger.error("Failed to log onPlayerDropHeldItems", e);
         }
     }
 
-    public static void onRemoveItemFromSquare(RemoveItemFromSquarePacketEvent event) {
-        try {
-            worldLogger.info(
-                    "{}: steamId={}, user={}, pos=({},{},{}), index={}",
-                    event.getName(),
-                    event.steamId,
-                    event.username,
-                    event.getX(),
-                    event.getY(),
-                    event.getZ(),
-                    event.getIndex());
-        } catch (Exception e) {
-            worldLogger.error("Failed to log onRemoveItemFromSquare", e);
-        }
-    }
-
     public static void onSledgehammerDestroy(SledgehammerDestroyPacketEvent event) {
         try {
+            SledgehammerDestroyPacket packet = event.getPacket();
             worldLogger.info(
                     "{}: steamId={}, user={}, pos=({},{},{}), index={}",
                     event.getName(),
                     event.steamId,
                     event.username,
-                    event.getX(),
-                    event.getY(),
-                    event.getZ(),
-                    event.getIndex());
+                    packet.x,
+                    packet.y,
+                    event.getField("z"),
+                    packet.index);
         } catch (Exception e) {
             worldLogger.error("Failed to log onSledgehammerDestroy", e);
         }
@@ -507,7 +498,8 @@ public class ItemEventHandler {
 
     public static void onBuildAction(BuildActionPacketEvent event) {
         try {
-            StormKahluaTable item = event.getItem();
+            KahluaTable rawItem = event.getPacket().item;
+            StormKahluaTable item = rawItem != null ? new StormKahluaTable(rawItem) : null;
             String itemName = item != null ? item.getString("name") : null;
             Object craftRecipeObject = item.rawget("craftRecipe");
             String translationName = "";
@@ -520,10 +512,10 @@ public class ItemEventHandler {
                     event.getName(),
                     event.steamId,
                     event.username,
-                    event.getX(),
-                    event.getY(),
-                    event.getZ(),
-                    event.getObjectType(),
+                    event.getField("x"),
+                    event.getField("y"),
+                    event.getField("z"),
+                    event.getField("objectType"),
                     itemName,
                     translationName);
 

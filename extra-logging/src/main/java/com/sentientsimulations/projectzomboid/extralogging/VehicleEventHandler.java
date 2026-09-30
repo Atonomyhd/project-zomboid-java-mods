@@ -2,6 +2,7 @@ package com.sentientsimulations.projectzomboid.extralogging;
 
 import io.pzstorm.storm.event.packet.*;
 import zombie.network.fields.hit.Player;
+import zombie.network.fields.vehicle.VehicleID;
 
 public class VehicleEventHandler {
 
@@ -10,6 +11,7 @@ public class VehicleEventHandler {
     public static void onPlayerHitVehicle(PlayerHitVehiclePacketEvent event) {
         try {
             Player wielder = (Player) event.getField("wielder");
+            VehicleID vehicleId = (VehicleID) event.getField("vehicleId");
             logger.info(
                     "{}: steamId={}, user={}, playerPos=({},{},{}), weapon={}, damage={}, vehiclePos=({},{},{}), vehicleId={}, vehicleName={}",
                     event.getName(),
@@ -19,12 +21,12 @@ public class VehicleEventHandler {
                     wielder.getY(),
                     wielder.getZ(),
                     event.getPacket().getHandWeapon().getName(),
-                    event.getDamage(),
-                    event.getVehicleId().getX(),
-                    event.getVehicleId().getY(),
-                    event.getVehicleId().getZ(),
-                    event.getVehicleId().getVehicle().vehicleId,
-                    event.getVehicleId().getVehicle().getScriptName());
+                    event.getField("damage"),
+                    vehicleId.getX(),
+                    vehicleId.getY(),
+                    vehicleId.getZ(),
+                    vehicleId.getVehicle().vehicleId,
+                    vehicleId.getVehicle().getScriptName());
         } catch (Exception e) {
             logger.error("Failed to log PlayerHitVehicle", e);
         }

@@ -8,8 +8,8 @@ import zombie.characters.IsoPlayer;
 
 /**
  * {@code AtfCasino:blackjack} — every table interaction rides one command with an {@code action}
- * field: {@code open, close, sit, leave, bet, hit, stand, double}. {@code bet} carries {@code
- * amount}.
+ * field: {@code open, close, sit, leave, bet, hit, stand, double, split, surrender}. {@code bet}
+ * carries {@code amount}.
  */
 @ClientCommand(module = "AtfCasino", command = "blackjack")
 public class BlackjackCommand extends ClientCommandEvent {
