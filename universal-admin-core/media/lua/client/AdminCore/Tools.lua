@@ -81,6 +81,7 @@ C.registerAction({
 })
 C.registerAction({
     id = "core.vehicle",
+    group = { "Spawn" },
     category = "Vehicles",
     title = "Spawn vehicle...",
     capability = Capability.ManipulateVehicle,
@@ -90,6 +91,7 @@ C.registerAction({
 })
 C.registerAction({
     id = "core.horde",
+    group = { "Zombies" },
     category = "Events",
     title = "Zombie / horde manager...",
     capability = Capability.CreateHorde,
@@ -103,6 +105,7 @@ C.registerAction({
 })
 C.registerAction({
     id = "core.cleanup",
+    group = { "Items" },
     category = "World",
     title = "Remove dropped items in area...",
     capability = Capability.EditItem,
@@ -113,6 +116,7 @@ C.registerAction({
 })
 C.registerAction({
     id = "core.coordinates",
+    group = { "Travel" },
     category = "World",
     title = "Copy my coordinates",
     capability = Capability.TeleportToCoordinates,
@@ -133,6 +137,7 @@ C.registerAction({
 })
 C.registerAction({
     id = "core.teleport",
+    group = { "Travel" },
     category = "World",
     title = "Teleport to coordinates...",
     capability = Capability.TeleportToCoordinates,

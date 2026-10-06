@@ -1,8 +1,10 @@
 require("ISUI/AdminPanel/ISAdminPanelUI")
 require("ISUI/ISTextEntryBox")
 require("AdminCore/Registry")
+require("AdminCore/ActionGroups")
 require("AdminCore/WorldSafezone")
 require("AdminCore/Tools")
+require("AdminCore/ContextActions")
 
 local C = AdminCore
 if C.controlCenterInstalled then
@@ -31,18 +33,14 @@ end
 function ISAdminPanelUI:uacCollect()
     self.uacEntries = {}
     for _, child in pairs(self:getChildren()) do
-        if
-            child.Type == "ISButton"
-            and child ~= self.cancel
-            and not child.uacOwned
-            and child ~= self.uacSizeButton
-        then
+        if child.Type == "ISButton" and child ~= self.cancel and not child.uacOwned then
             local id = child.internal or ""
             self.uacEntries[#self.uacEntries + 1] = {
                 button = child,
                 category = C.nativeSections[id] or "Mods",
                 keywords = C.nativeKeywords[id],
                 quick = C.quickAccess[id],
+                groups = C.nativeGroups[id],
             }
         end
     end
@@ -56,7 +54,11 @@ function ISAdminPanelUI:uacCollect()
             self.uacCustom[id] = b
         end
         b:setTitle(action.title)
-        b.tooltip = action.tooltip
+        b.tooltip = action.category
+            .. " / "
+            .. (action.group and (table.concat(action.group, " / ") .. " / ") or "")
+            .. action.title
+            .. (action.tooltip and ("\n" .. action.tooltip) or "")
         self.uacEntries[#self.uacEntries + 1] = {
             button = b,
             category = action.category,
@@ -72,6 +74,39 @@ function ISAdminPanelUI:uacCollect()
         end
         return at < bt
     end)
+    self.uacTree, self.uacGroupEntries = C.buildActionTree(self.uacEntries)
+    self.uacGroupButtons = self.uacGroupButtons or {}
+    for id, entry in pairs(self.uacGroupEntries) do
+        local key = id
+        local b = self.uacGroupButtons[key]
+        if not b then
+            b = button(self, entry.title, function(p)
+                p.uacExpanded[key] = not p.uacExpanded[key]
+                p:uacRefresh()
+            end)
+            b.uacArrowUp = getTexture("media/ui/ArrowUp.png")
+            b.uacArrowDown = getTexture("media/ui/ArrowDown.png")
+            local render = b.render
+            b.render = function(control)
+                render(control)
+                local icon = self.uacExpanded[key] and control.uacArrowUp or control.uacArrowDown
+                if icon then
+                    control:drawTexture(
+                        icon,
+                        control.width - 22,
+                        (control.height - icon:getHeight()) / 2,
+                        1,
+                        1,
+                        1,
+                        1
+                    )
+                end
+            end
+            b.backgroundColor = { r = 0.12, g = 0.2, b = 0.25, a = 0.9 }
+            self.uacGroupButtons[key] = b
+        end
+        entry.button = b
+    end
     self.uacVersion = C.registryVersion
     self.uacDirty = false
 end
@@ -84,40 +119,65 @@ function ISAdminPanelUI:uacRefresh()
         self:uacCollect()
     end
     local query = self.uacSearch:getInternalText()
-    local visible = {}
-    for _, entry in ipairs(self.uacEntries) do
-        entry.button:setVisible(false)
-        if entry.action then
-            entry.button:setEnable(C.canRun(entry.action))
-        end
-        if
-            C.matchesAction(
-                tostring(entry.button.title),
-                entry.category,
-                entry.keywords,
-                self.uacSection,
-                query,
-                entry.quick
-            )
-        then
-            visible[#visible + 1] = entry
+    self.uacExpanded = self.uacExpanded or {}
+    for _, b in pairs(self.uacCustom or {}) do
+        b:setVisible(false)
+    end
+    for _, b in pairs(self.uacGroupButtons or {}) do
+        b:setVisible(false)
+        if b.uacKeyboardBorder then
+            b.borderColor, b.uacKeyboardBorder = b.uacKeyboardBorder, nil
         end
     end
+    for _, entry in ipairs(self.uacEntries) do
+        entry.button:setVisible(false)
+        if entry.button.uacKeyboardBorder then
+            entry.button.borderColor = entry.button.uacKeyboardBorder
+            entry.button.uacKeyboardBorder = nil
+        end
+        if entry.action then
+            entry.enabled = C.canRun(entry.action)
+            entry.button:setEnable(entry.enabled)
+        end
+        entry.button:setTitle(
+            query:match("%S") and entry.path ~= "" and (entry.path .. " / " .. entry.title)
+                or entry.title
+        )
+    end
+    local visible, hierarchical =
+        C.actionRows(self.uacTree, self.uacEntries, self.uacSection, query, self.uacExpanded)
+    self.uacHierarchical = hierarchical
     local font = getTextManager():getFontHeight(UIFont.Small)
-    local g = C.pageGeometry(self.width, self.height, font, #visible, self.uacPage)
+    local g = C.pageGeometry(self.width, self.height, font, #visible, self.uacPage, hierarchical)
+    self.uacResults = visible
+    self.uacSelected = math.max(1, math.min(self.uacSelected or 1, #visible))
     self.uacPage = g.page
     local left = 180
     local columnWidth = math.floor((self.width - left - 24 - (g.columns - 1) * 10) / g.columns)
     local first = (g.page - 1) * g.pageSize + 1
+    if self.uacSelected < first or self.uacSelected >= first + g.pageSize then
+        self.uacSelected = first
+    end
     for i = first, math.min(#visible, first + g.pageSize - 1) do
-        local b = visible[i].button
+        local entry = visible[i]
+        local b = entry.button
+        local indent = hierarchical and math.min(entry.depth, 5) * 18 or 0
+        if entry.isGroup then
+            local opened = self.uacExpanded[entry.id]
+            b:setTitle(entry.title .. "  (" .. entry.count .. ")")
+            b.tooltip = (opened and "Collapse " or "Expand ") .. entry.title
+        end
         C.pin(b)
         local index = i - first
-        b:setX(left + (index % g.columns) * (columnWidth + 10))
+        b:setX(left + (index % g.columns) * (columnWidth + 10) + indent)
         b:setY(108 + math.floor(index / g.columns) * (g.rowHeight + 8))
-        b:setWidth(columnWidth)
+        b:setWidth(columnWidth - indent)
         b:setHeight(g.rowHeight)
         b:setVisible(true)
+        if i == self.uacSelected then
+            b.uacKeyboardBorder = b.borderColor
+            b.borderColor = { r = 0.3, g = 0.75, b = 1, a = 1 }
+        end
         -- Keep long third-party labels readable in their tooltip when clipped.
         if not b.tooltip then
             b.tooltip = tostring(b.title)
@@ -151,20 +211,30 @@ function ISAdminPanelUI:uacRefresh()
     self.cancel:setX(self.width - self.cancel.width - 24)
     self.cancel:setY(self.height - 32 - self.cancel.height)
     self.uacHeading = query:match("%S") and "Search results" or self.uacSection
-    self.uacSummary = #visible .. " actions  |  Page " .. g.page .. " / " .. g.pages
+    self.uacSummary = #visible
+        .. (hierarchical and " entries" or " actions")
+        .. "  |  Page "
+        .. g.page
+        .. " / "
+        .. g.pages
     self.uacEmpty = #visible == 0
 end
 
 function ISAdminPanelUI:create()
+    if C.importDebugPanels then
+        C.importDebugPanels()
+    end
     originalCreate(self)
     self.uacSection = "Dashboard"
     self.uacPage = 1
+    self.uacExpanded = {}
     self.uacNav = {}
     for _, section in ipairs(C.sections) do
         local name = section
         self.uacNav[#self.uacNav + 1] = button(self, name, function(p)
             p.uacSection = name
             p.uacPage = 1
+            p.uacSelected = 1
             p.uacSearch:setText("")
             p:uacRefresh()
         end)
@@ -172,10 +242,25 @@ function ISAdminPanelUI:create()
     self.uacSearch = ISTextEntryBox:new("", 180, 42, 400, 28)
     self.uacSearch:initialise()
     self.uacSearch.tooltip =
-        "Search every category by action or topic, for example weather, players or permissions."
+        "Search actions. Up/Down selects, Enter opens, Escape closes. Ctrl+A opens this panel when you are not typing."
     self.uacSearch.onTextChange = function()
         self.uacPage = 1
+        self.uacSelected = 1
         self:uacRefresh()
+    end
+    self.uacSearch.onPressDown = function()
+        self:uacSelect(1)
+    end
+    self.uacSearch.onPressUp = function()
+        self:uacSelect(-1)
+    end
+    self.uacSearch.onCommandEntered = function()
+        self:uacActivate()
+    end
+    self.uacSearch.onOtherKey = function(_, key)
+        if key == Keyboard.KEY_ESCAPE then
+            self:close()
+        end
     end
     self:addChild(self.uacSearch)
     self.uacPrevious = button(self, "Previous", function(p)
@@ -192,7 +277,80 @@ function ISAdminPanelUI:create()
     C.resizable(self, "ControlCenter", 660, 490, function(p)
         p:uacRefresh()
     end)
+    if self.uacSearch.focus then
+        self.uacSearch:focus()
+    end
 end
+
+function ISAdminPanelUI:uacSelect(delta)
+    self:uacRefresh()
+    local count = #self.uacResults
+    if count == 0 then
+        return
+    end
+    self.uacSelected = math.max(1, math.min(count, self.uacSelected + delta))
+    local g = C.pageGeometry(
+        self.width,
+        self.height,
+        getTextManager():getFontHeight(UIFont.Small),
+        count,
+        1,
+        self.uacHierarchical
+    )
+    self.uacPage = math.floor((self.uacSelected - 1) / g.pageSize) + 1
+    self:uacRefresh()
+end
+
+function ISAdminPanelUI:uacActivate()
+    -- Native buttons can lose permission while the window/search remains open.
+    local entry = self.uacResults[self.uacSelected or 1]
+    self:updateButtons()
+    if
+        not entry
+        or not entry.button:getIsVisible()
+        or entry.button.enable == false
+        or not entry.button.onclick
+    then
+        return
+    end
+    if self.uacSearch.unfocus then
+        self.uacSearch:unfocus()
+    end
+    entry.button.onclick(entry.button.target, entry.button)
+end
+
+local originalClose = ISAdminPanelUI.close
+function ISAdminPanelUI:close()
+    if self.uacSearch and self.uacSearch.unfocus then
+        self.uacSearch:unfocus()
+    end
+    return originalClose(self)
+end
+
+function C.openControlCenter()
+    local player = getPlayer()
+    if not player or not player:getRole() or not player:getRole():hasAdminPower() then
+        return
+    end
+    local panel = ISAdminPanelUI.instance
+    if not panel then
+        panel = ISAdminPanelUI:new(100, 100, 960, 600)
+        panel:initialise()
+        panel:addToUIManager()
+    end
+    panel:setVisible(true)
+    panel:bringToTop()
+    panel.uacSearch:focus()
+    return panel
+end
+
+function C.onControlCenterKey(key)
+    if key ~= Keyboard.KEY_A or not isCtrlKeyDown() or getCore():isDoingTextEntry() then
+        return
+    end
+    C.openControlCenter()
+end
+Events.OnKeyStartPressed.Add(C.onControlCenterKey)
 
 function ISAdminPanelUI:updateButtons()
     originalUpdate(self)

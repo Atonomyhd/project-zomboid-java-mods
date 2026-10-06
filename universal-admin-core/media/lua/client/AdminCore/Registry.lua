@@ -46,6 +46,7 @@ C.nativeKeywords = {
     SEEROLES = "roles permissions access level",
     SEETICKETS = "tickets reports",
 }
+C.nativeGroups = { ITEMLIST = { "Items" }, CLIMATE = { "Weather" } }
 C.quickAccess = {
     SEEUSERS = true,
     ADMINPOWER = true,
@@ -75,6 +76,12 @@ function C.registerAction(action)
         end
     end
     assert(valid, "Unknown control-center category")
+    if action.group then
+        assert(type(action.group) == "table", "Action group must be a path of labels")
+        for _, label in ipairs(action.group) do
+            assert(type(label) == "string" and label ~= "", "Group labels must not be empty")
+        end
+    end
     C.actions[action.id] = action
     C.registryVersion = C.registryVersion + 1
 end
@@ -114,10 +121,10 @@ function C.matchesAction(title, category, keywords, section, query, quick)
 end
 
 -- Pagination keeps every action reachable at small resolutions and large fonts.
-function C.pageGeometry(width, height, fontHeight, count, page)
+function C.pageGeometry(width, height, fontHeight, count, page, hierarchical)
     local rowHeight = math.max(32, fontHeight + 12)
     local rows = math.max(1, math.floor((height - 166) / (rowHeight + 8)))
-    local columns = width >= 900 and 2 or 1
+    local columns = not hierarchical and width >= 900 and 2 or 1
     local pageSize = rows * columns
     local pages = math.max(1, math.ceil(count / pageSize))
     return {

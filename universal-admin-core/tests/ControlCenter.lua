@@ -45,6 +45,12 @@ getPlayer = function()
     return player
 end
 local sw, sh, font, mx, my = 1280, 720, 16, 0, 0
+getMouseX = function()
+    return mx
+end
+getMouseY = function()
+    return my
+end
 getCore = function()
     return {
         getScreenWidth = function()
@@ -162,6 +168,19 @@ function W:setTitle(value)
     self.title = value
 end
 function W:drawText() end
+function W:render() end
+local drawnIcon
+function W:drawTexture(icon)
+    drawnIcon = icon
+end
+getTexture = function(path)
+    return {
+        path = path,
+        getHeight = function()
+            return 8
+        end,
+    }
+end
 ISPanel = W:derive("ISPanel")
 ISButton = W:derive("ISButton")
 function ISButton:new(x, y, w, h, title, target, onclick)
@@ -188,6 +207,7 @@ end
 dofile(game .. "/media/lua/client/ISUI/AdminPanel/ISAdminPanelUI.lua")
 dofile(client .. "WindowSizing.lua")
 dofile(client .. "Registry.lua")
+dofile(client .. "ActionGroups.lua")
 dofile(client .. "Tools.lua")
 dofile(client .. "ControlCenter.lua")
 local C = AdminCore
@@ -220,9 +240,13 @@ p:uacRefresh()
 check(p.climateOptionsBtn.visible, "Search finds native actions by topic across categories")
 p.climateOptionsBtn.onclick(p.climateOptionsBtn.target, p.climateOptionsBtn)
 check(climateCalls == 1, "Native action retains original callback")
+p.uacSearch.onCommandEntered()
+check(climateCalls == 2, "Enter invokes the selected native action")
 caps.ClimateManager = false
 p:updateButtons()
 check(not p.climateOptionsBtn.enable, "Native capability changes still disable action")
+p.uacSearch.onCommandEntered()
+check(climateCalls == 2, "Enter cannot bypass revoked native permission")
 check(
     not C.matchesAction("Save", "Server", "", "Server", "[", false),
     "Search treats Lua patterns literally"
@@ -250,6 +274,133 @@ C.runAction(action)
 caps.Test = false
 C.runAction(action)
 check(ran == 1, "Revoked permission is checked again when action executes")
+-- The real panel displays collapsed groups, searches their leaves and keeps native permissions.
+local noiseRuns = 0
+for _, radius in ipairs({ 10, 20, 50, 100, 200, 500 }) do
+    C.registerAction({
+        id = "noise." .. radius,
+        title = "Radius: " .. radius,
+        category = "Events",
+        group = { "Make noise" },
+        capability = "Noise",
+        hideUnavailable = true,
+        run = function()
+            noiseRuns = noiseRuns + 1
+        end,
+    })
+end
+p.uacSection, p.uacPage, p.uacSelected = "Events", 1, 1
+p.uacSearch:setText("")
+p:uacRefresh()
+local noiseGroup = p.uacGroupEntries["Events\31Make noise"]
+check(
+    noiseGroup.button.visible and not p.uacCustom["noise.10"].visible,
+    "Six noise choices start collapsed behind one group"
+)
+noiseGroup.button:render()
+check(drawnIcon.path:find("ArrowDown", 1, true), "Closed group displays downward caret")
+noiseGroup.button.onclick(p, noiseGroup.button)
+check(
+    p.uacCustom["noise.10"].visible and noiseRuns == 0,
+    "Opening a group reveals choices without executing one"
+)
+noiseGroup.button:render()
+check(drawnIcon.path:find("ArrowUp", 1, true), "Open group displays upward caret")
+check(p.uacCustom["noise.10"].x > noiseGroup.button.x, "Choices are visibly indented")
+noiseGroup.button.onclick(p, noiseGroup.button)
+p.uacSearch:setText("make noise")
+p:uacRefresh()
+check(
+    #p.uacResults == 6 and not noiseGroup.button.visible,
+    "Search finds leaves inside closed groups without duplicate headers"
+)
+p:uacActivate()
+check(noiseRuns == 1, "Keyboard activates a matched nested choice")
+caps.Noise = false
+p.uacSearch:setText("")
+p:uacRefresh()
+check(not noiseGroup.button.visible, "An unavailable group is hidden instead of red")
+
+local debugAvailable = false
+C.registerAction({
+    id = "nested.debug",
+    title = "Animation viewer",
+    category = "Settings",
+    group = { "Debug", "UIs" },
+    allowed = function()
+        return debugAvailable
+    end,
+    hideUnavailable = true,
+    run = function()
+        error("Not clicked")
+    end,
+})
+p.uacSection = "Settings"
+p:uacRefresh()
+check(
+    not p.uacGroupEntries["Settings\31Debug"].button.visible,
+    "Unavailable developer panels do not leave empty Debug groups"
+)
+debugAvailable = true
+p:uacRefresh()
+local debugGroup = p.uacGroupEntries["Settings\31Debug"]
+debugGroup.button.onclick(p, debugGroup.button)
+local uiGroup = p.uacGroupEntries["Settings\31Debug\31UIs"]
+check(
+    uiGroup.button.visible and not p.uacCustom["nested.debug"].visible,
+    "Nested categories expand one level at a time"
+)
+uiGroup.button.onclick(p, uiGroup.button)
+check(p.uacCustom["nested.debug"].visible, "Nested category reveals its tools")
+debugGroup.button.onclick(p, debugGroup.button)
+check(not p.uacCustom["nested.debug"].visible, "Closing parent hides all nested tools")
+-- If a hidden-on-denial result disappears, Enter must not run the following result.
+local replacementRuns = 0
+for _, id in ipairs({ "first", "second" }) do
+    local key = id
+    C.registerAction({
+        id = "revoke." .. id,
+        title = "Revoke " .. id,
+        category = "Security",
+        allowed = function()
+            return key == "second" or debugAvailable
+        end,
+        hideUnavailable = true,
+        run = function()
+            replacementRuns = replacementRuns + 1
+        end,
+    })
+end
+p.uacSearch:setText("revoke")
+p.uacSelected = 1
+p:uacRefresh()
+debugAvailable = false
+p:uacActivate()
+check(replacementRuns == 0, "Revocation cannot make Enter run a different result")
+Keyboard = { KEY_A = 30, KEY_ESCAPE = 1 }
+local opened, typing, ctrl = 0, false, true
+local core = getCore
+getCore = function()
+    local c = core()
+    c.isDoingTextEntry = function()
+        return typing
+    end
+    return c
+end
+isCtrlKeyDown = function()
+    return ctrl
+end
+local opener = C.openControlCenter
+C.openControlCenter = function()
+    opened = opened + 1
+end
+C.onControlCenterKey(Keyboard.KEY_A)
+typing = true
+C.onControlCenterKey(Keyboard.KEY_A)
+typing, ctrl = false, false
+C.onControlCenterKey(Keyboard.KEY_A)
+check(opened == 1, "Ctrl+A opens once; text selection and ordinary A are preserved")
+C.openControlCenter = opener
 local confirm
 C.confirm = function(_, fn)
     confirm = fn
@@ -317,6 +468,14 @@ for _, screen in ipairs({ { 1280, 720, 16 }, { 1280, 720, 28 }, { 800, 600, 28 }
         reached = reached + 1
     end
     check(reached == 92, "Pagination keeps all native and extension actions reachable")
+    p.uacPage, p.uacSelected = 1, 1
+    for i = 1, 91 do
+        p:uacSelect(1)
+    end
+    check(
+        p.uacSelected == 92 and p.uacResults[92].button.visible,
+        "Arrow keys reach results across pages"
+    )
 end
 -- Exercise the real control-center layout and native mouse handler between
 -- deferred anchor updates, rather than only calling the layout at fixed sizes.
