@@ -64,6 +64,14 @@ option SkillObelisk.RecoverHiddenSkills
     translation = SkillObelisk_RecoverHiddenSkills,
 }
 
+option SkillObelisk.RecoverInventions
+{
+    type = boolean,
+    default = true,
+    page = SkillObelisk,
+    translation = SkillObelisk_RecoverInventions,
+}
+
 option SkillObelisk.SkillRecoveryPercent
 {
     type = integer,
@@ -90,12 +98,56 @@ option SkillObelisk.ShowDeathReminder
     translation = SkillObelisk_ShowDeathReminder,
 }
 
-option SkillObelisk.MapObeliskVisibility
+option SkillObelisk.BlessingDurationHours
 {
-    type = enum,
-    numValues = 3,
-    default = 1,
+    type = integer,
+    min = 1,
+    max = 100000,
+    default = 24,
     page = SkillObelisk,
-    translation = SkillObelisk_MapObeliskVisibility,
-    valueTranslation = SkillObelisk_MapObeliskVisibility_Values,
+    translation = SkillObelisk_BlessingDurationHours,
+}
+
+option SkillObelisk.BlessingXpBonusPercent
+{
+    type = integer,
+    min = 0,
+    max = 10000,
+    default = 50,
+    page = SkillObelisk,
+    translation = SkillObelisk_BlessingXpBonusPercent,
+}
+
+option SkillObelisk.MapShowGeneralObelisks
+{
+    type = boolean,
+    default = false,
+    page = SkillObelisk,
+    translation = SkillObelisk_MapShowGeneralObelisks,
+}
+
+option SkillObelisk.MapShowSkillObelisks
+{
+    type = boolean,
+    default = false,
+    page = SkillObelisk,
+    translation = SkillObelisk_MapShowSkillObelisks,
+}
+
+option SkillObelisk.MapShowBlessingObelisks
+{
+    type = boolean,
+    default = false,
+    page = SkillObelisk,
+    translation = SkillObelisk_MapShowBlessingObelisks,
+}
+
+option SkillObelisk.ProximityAlertDistance
+{
+    type = integer,
+    min = 0,
+    max = 200,
+    default = 10,
+    page = SkillObelisk,
+    translation = SkillObelisk_ProximityAlertDistance,
 }

@@ -1,7 +1,7 @@
 --
 -- SurvivorSkillObeliskHiddenSkillSync.lua
 -- Mirrors the Lifestyles mod's hidden-skill table (LSHiddenSkills: Yoga,
--- Inventing) from the client to the server-side player modData.
+-- Inventing, PingPong) from the client to the server-side player modData.
 --
 -- Lifestyles earns hidden-skill XP in client-only Lua (HSMng.lua), but B42
 -- player persistence is server-authoritative, and Lifestyles' own

@@ -14,7 +14,8 @@ import zombie.characters.skills.PerkFactory;
 
 /**
  * Handles the {@code SurvivorSkillObelisk:setObeliskType} client command. Admin-only: persists a
- * skill-type label for the obelisk at the given world coordinates. {@code "None"} clears the type.
+ * type label for the obelisk at the given world coordinates: a perk id, {@link
+ * ObeliskTypes#BLESSING}, or {@code "None"} to clear it.
  *
  * <p>The admin check is enforced server-side regardless of UI gating — the Lua menu hides the
  * option for non-admins, but a hand-crafted packet shouldn't be able to mutate state either.
@@ -84,7 +85,9 @@ public final class SetObeliskTypeHandler {
         if (type == null || type.isBlank()) {
             type = NONE;
         }
-        if (!NONE.equals(type) && PerkFactory.Perks.FromString(type) == null) {
+        if (!NONE.equals(type)
+                && !ObeliskTypes.BLESSING.equals(type)
+                && PerkFactory.Perks.FromString(type) == null) {
             LOGGER.warn(
                     "[SurvivorSkillObelisk] setObeliskType from {} with unknown perk '{}';"
                             + " dropping",

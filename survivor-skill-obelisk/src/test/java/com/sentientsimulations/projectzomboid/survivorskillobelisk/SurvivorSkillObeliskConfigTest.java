@@ -31,10 +31,36 @@ class SurvivorSkillObeliskConfigTest {
         assertTrue(SurvivorSkillObeliskConfig.isRecoverLearnedSongs());
         assertTrue(SurvivorSkillObeliskConfig.isRecoverAmbitions());
         assertTrue(SurvivorSkillObeliskConfig.isRecoverHiddenSkills());
+        assertTrue(SurvivorSkillObeliskConfig.isRecoverInventions());
         assertEquals(100, SurvivorSkillObeliskConfig.DEFAULT_SKILL_RECOVERY_PERCENT);
         assertEquals(100, SurvivorSkillObeliskConfig.getSkillRecoveryPercent());
         assertTrue(SurvivorSkillObeliskConfig.DEFAULT_CURSE_ON_SLEDGEHAMMER);
         assertTrue(SurvivorSkillObeliskConfig.isCurseOnSledgehammer());
+        assertEquals(24, SurvivorSkillObeliskConfig.DEFAULT_BLESSING_DURATION_HOURS);
+        assertEquals(24, SurvivorSkillObeliskConfig.getBlessingDurationHours());
+        assertEquals(50, SurvivorSkillObeliskConfig.DEFAULT_BLESSING_XP_BONUS_PERCENT);
+        assertEquals(50, SurvivorSkillObeliskConfig.getBlessingXpBonusPercent());
+    }
+
+    @Test
+    void blessingDurationClampsToAtLeastOneHour() {
+        assertEquals(1, SurvivorSkillObeliskConfig.setBlessingDurationHours(0));
+        assertEquals(1, SurvivorSkillObeliskConfig.setBlessingDurationHours(-5));
+        assertEquals(1, SurvivorSkillObeliskConfig.getBlessingDurationHours());
+        assertEquals(
+                SurvivorSkillObeliskConfig.MAX_BLESSING_DURATION_HOURS,
+                SurvivorSkillObeliskConfig.setBlessingDurationHours(Integer.MAX_VALUE));
+        assertEquals(72, SurvivorSkillObeliskConfig.setBlessingDurationHours(72));
+    }
+
+    @Test
+    void blessingXpBonusAllowsValuesAbove100() {
+        assertEquals(0, SurvivorSkillObeliskConfig.setBlessingXpBonusPercent(-1));
+        assertEquals(300, SurvivorSkillObeliskConfig.setBlessingXpBonusPercent(300));
+        assertEquals(300, SurvivorSkillObeliskConfig.getBlessingXpBonusPercent());
+        assertEquals(
+                SurvivorSkillObeliskConfig.MAX_BLESSING_XP_BONUS_PERCENT,
+                SurvivorSkillObeliskConfig.setBlessingXpBonusPercent(Integer.MAX_VALUE));
     }
 
     @Test
@@ -47,6 +73,7 @@ class SurvivorSkillObeliskConfigTest {
         SurvivorSkillObeliskConfig.setRecoverLearnedSongs(false);
         SurvivorSkillObeliskConfig.setRecoverAmbitions(false);
         SurvivorSkillObeliskConfig.setRecoverHiddenSkills(false);
+        SurvivorSkillObeliskConfig.setRecoverInventions(false);
         SurvivorSkillObeliskConfig.setCurseOnSledgehammer(false);
 
         assertFalse(SurvivorSkillObeliskConfig.isRecoverSkills());
@@ -57,6 +84,7 @@ class SurvivorSkillObeliskConfigTest {
         assertFalse(SurvivorSkillObeliskConfig.isRecoverLearnedSongs());
         assertFalse(SurvivorSkillObeliskConfig.isRecoverAmbitions());
         assertFalse(SurvivorSkillObeliskConfig.isRecoverHiddenSkills());
+        assertFalse(SurvivorSkillObeliskConfig.isRecoverInventions());
         assertFalse(SurvivorSkillObeliskConfig.isCurseOnSledgehammer());
 
         SurvivorSkillObeliskConfig.setRecoverSkills(true);

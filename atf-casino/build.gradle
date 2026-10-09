@@ -29,7 +29,7 @@ A multiplayer casino for the After the Fall server. Sit down at a table, buy chi
 
 [b][url=https://discord.gg/after-the-fall]After The Fall[/url][/b]: the #1 multiplayer server in the world
 
-Tested and compatible with 42.20.2'''
+Tested and compatible with 42.21.0'''
 	modVersion = '0.1.0'
 	pack = packName
 	tiledef = "${packName} 8103"

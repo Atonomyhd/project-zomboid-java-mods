@@ -10,7 +10,7 @@ B42 proximity inventory that brings back the context menu right click.
 
 Includes "Move to Floor" button in Proximity Inventory view allowing you to move all items from surrounding containers to the floor.
 
-Updated for 42.20.0
+Tested and compatible with 42.21.0
 
 Includes CN and ES languages translated via Claude
 

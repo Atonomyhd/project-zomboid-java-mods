@@ -26,6 +26,35 @@ Requires: [Storm](https://steamcommunity.com/sharedfiles/filedetails/?id=3670772
     PZ tracks consumption per media *line* on the character (`knownMediaLines`, no public getter),
     so the handler iterates the global `RecordedMedia` catalog and tests each tape's lines against
     the player, recording lines-watched / total and a fully-watched flag.
+  - **Lifestyles inventions** — `death_inventions`, the character's whole `invData` research table
+    (inventions, toys, improvement levels, `specialMax`) as one JSON document. Lifestyles only
+    mirrors this table to the server on an Inventing level-up, so
+    `SurvivorSkillObeliskInventionSync.lua` pushes it within a game minute of any change. Recovery
+    merges without ever taking progress away and is not scaled by Skill Recovery (%).
+
+### Obelisk Blessing
+
+An admin can configure an obelisk as **Obelisk Blessing** instead of a skill. Right-clicking it
+shows "Receive Obelisk Blessing" in place of "Recover Skills". Receiving it writes a `blessings`
+row whose expiry is `worldAgeHours + SkillObelisk.BlessingDurationHours`; while it is unexpired
+the server adds `SkillObelisk.BlessingXpBonusPercent` percent on top of every perk XP gain the
+character makes (the bonus is computed from the final, sandbox-multiplied amount, so it stacks
+with the world's XP multipliers; values above 100 are allowed). Re-receiving restarts the timer;
+death does not end it. Rows are scoped per world (`Core.gameSaveWorld`), because each server
+counts world age from its own start; another mod on the same machine hands a blessing across
+servers with `ObeliskBlessingHandler.grant(steamId, username, hours, by)`, which blesses the
+character here for `hours` from now, keeping a longer blessing it already holds, and answers false
+for a blank name or no hours. pvp-raids uses it to carry a raid's blessing home. Lifestyles Meditation XP goes through the server and is boosted the same
+way; Lifestyles hidden skills (Yoga, Inventing, PingPong) are earned client-side, so
+`SurvivorSkillObeliskBlessing.lua` wraps `HiddenSkills.addXP` for the local player with the same
+multiplier.
+
+While blessed, a green moodle with an obelisk icon sits under the vanilla moodle stack
+(`SurvivorSkillObeliskBlessingMoodle.lua`). Vanilla `MoodlesUI` has no registration API and the
+Moodle Framework is not on the servers we target, so the moodle is a small `ISUIElement` that
+reuses the vanilla background and outline textures tinted with the player's "good" moodle colour,
+sized from the player's moodle-size option. Icons live in `media/ui/SurvivorSkillObelisk/` at the
+six vanilla sizes (32 to 128). Hovering shows the bonus and the time left.
 
 ## Architecture
 
@@ -35,8 +64,33 @@ src/main/java/com/sentientsimulations/projectzomboid/survivorskillobelisk/
 ├── DeathEventHandler.java               # Extracts player data, resolves DB path, persists snapshot
 ├── SurvivorSkillObeliskDatabase.java    # SQLite connection + schema bootstrap (per-call connection)
 ├── SurvivorSkillObeliskRepository.java  # SQL inserts (no business logic)
+├── ObeliskPlacement.java                # Places an obelisk from server Java and types it (see below)
 └── patch/                               # Server-only Storm bytecode patches (obelisk protection)
 ```
+
+### Placement from other mods
+
+`ObeliskPlacement.ensure(x, y, z, type, by)` puts an obelisk on a loaded square from server Java,
+the way the brush tool does, and writes its `obelisk_types` row in the same call. A square that
+already holds an obelisk keeps it and only gets its type row and the `obeliskUpdated` broadcast.
+A new obelisk is a large one (`atf_obelisks_lg_01_<0..13>`) of a random colour. `type` is `None`,
+`Blessing` or a perk id. It answers a status string, `placed`, `present`, `unloaded` (the chunk is
+not loaded, try again later), `no-sprite`, `bad-type` or `failed`, and it is meant to be called by
+reflection so a caller runs without this mod. Main thread only. It fires no `OnObjectAdded`,
+because `ObeliskLifecycleHandler` answers that event by marking the row `None`. pvp-raids places
+the obelisks of a configuration this way on its child servers.
+
+`ObeliskPlacement.remove(x, y, z, by)` takes the obelisk off a loaded square the way the server's
+destroy action does, drops its `obelisk_types` row and broadcasts `obeliskRemoved`. It answers
+`removed`, `absent` (no obelisk stood there; a stale row is still dropped), `unloaded` or
+`failed`. pvp-raids uses it when a configured obelisk loses its spawn roll.
+
+### Several servers on one database
+
+A server started with `-DSurvivorSkillObelisk.recordDeaths=false` still clears skill recoveries
+and the pre-death snapshot (`RecoverSkillsHandler.notifyDeath`) but writes no `deaths` row and no
+snapshot. pvp-raids sets it on a raid child that shares the main server's database, because the
+main server replays every raid death itself.
 
 ## Obelisk indestructibility
 
@@ -169,6 +223,44 @@ are written.
 
 Each child table has an index on `death_id`. Only media with at least one watched line are written.
 
+### `death_inventions`
+
+| column   | type    | notes                                                              |
+|----------|---------|--------------------------------------------------------------------|
+| id       | INTEGER | primary key                                                        |
+| death_id | INTEGER | not null; FK → `deaths(id)`                                        |
+| inv_data | TEXT    | not null; Lifestyles `invData` as JSON (`LuaTableJson`), transient `lsWkID` / `workCost` stripped |
+
+One row per death, written only when the table holds an invention, a toy, or a raised `specialMax`.
+
+### `obelisk_types`
+
+| column          | type    | notes                                                   |
+|-----------------|---------|---------------------------------------------------------|
+| x, y, z         | INTEGER | primary key; obelisk square                             |
+| type            | TEXT    | not null; perk id, `Blessing`, or `None`                |
+| set_by_username | TEXT    | admin who configured it                                 |
+| set_by_steam_id | INTEGER |                                                         |
+| set_ts          | INTEGER | not null; epoch millis                                  |
+
+### `blessings`
+
+One row per character and world; receiving the blessing again overwrites it. A table from before
+the `world` column is dropped and made again at start, blessings included.
+
+| column              | type    | notes                                                  |
+|---------------------|---------|--------------------------------------------------------|
+| world               | TEXT    | primary key; `Core.gameSaveWorld` of the server        |
+| steam_id, username  |         | primary key; same identity as `recoveries`             |
+| obelisk_x/y/z       | INTEGER | not null; where it was received, 0,0,0 for a hand-off  |
+| bonus_percent       | INTEGER | not null; sandbox value at grant time (informational)  |
+| granted_ts          | INTEGER | not null; epoch millis                                 |
+| granted_world_hours | REAL    | not null; `GameTime.getWorldAgeHours()` at grant       |
+| expires_world_hours | REAL    | not null; granted + `BlessingDurationHours`            |
+
+The live sandbox `BlessingXpBonusPercent` is what the boost applies; the stored column only
+records what the player was promised. Expired rows are pruned on server start.
+
 ## Building
 
 ```bash
@@ -220,4 +312,17 @@ non-transparent pixels to end up in the atlas.
 
 `SurvivorSkillObeliskDatabaseTest` — schema bootstrap (all tables exist) and the insert paths for
 the death row plus every child table (skills, recipes, read literature, print media, watched
-media), against a real SQLite file in a JUnit `@TempDir`.
+media), plus `blessings` upsert / active-list / expiry pruning, against a real SQLite file in a
+JUnit `@TempDir`.
+
+`LuaTableJsonTest` — the hand-rolled Kahlua ↔ JSON codec: round trips, array-vs-object detection,
+numeric keys, escapes, dropped NaN / Java values, malformed input.
+
+`InventionsDataTest` / `SyncInventionsHandlerTest` — transient-key stripping, depth and node caps,
+and the never-lose-progress merge for Lifestyles inventions.
+
+`ObeliskBlessingXpBoostTest` — pure math for the bonus amount and the Strength protein
+compensation factor.
+
+`SurvivorSkillObeliskConfigTest` — defaults and clamps, including the blessing duration (min 1
+hour) and bonus percent (0 to 10000, so above 100 is allowed).

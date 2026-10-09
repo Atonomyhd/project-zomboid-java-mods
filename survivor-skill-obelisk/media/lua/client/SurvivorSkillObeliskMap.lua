@@ -15,11 +15,7 @@ local LIST_REPLY = "obeliskList"
 local UPDATED_REPLY = "obeliskUpdated"
 local REMOVED_REPLY = "obeliskRemoved"
 local NONE_TYPE = "None"
-
--- SkillObelisk.MapObeliskVisibility enum values (1-based, matches sandbox-options.txt).
-local VISIBILITY_ALL = 1
-local VISIBILITY_GENERAL_ONLY = 2
-local VISIBILITY_NONE = 3
+local BLESSING_TYPE = "Blessing"
 
 local DOT_R, DOT_G, DOT_B = 52 / 255, 88 / 255, 235 / 255
 local DOT_ALPHA_CONFIGURED = 0.95
@@ -243,26 +239,19 @@ local function renderObelisk(mapUI, obelisk)
     renderObeliskLabel(javaObject, cx, cy + half, label)
 end
 
--- Sandbox-synced to the client by PZ; nil before world load, so guard and fall
--- back to "show all" (option1) to match the compiled-in default.
-local function getVisibilityMode()
-    local sv = SandboxVars and SandboxVars.SkillObelisk
-    local mode = sv and sv.MapObeliskVisibility
-    if type(mode) ~= "number" then
-        return VISIBILITY_ALL
+local function mapOptionFor(typeId)
+    if typeId == nil or typeId == "" or typeId == NONE_TYPE then
+        return "MapShowGeneralObelisks"
     end
-    return mode
+    if typeId == BLESSING_TYPE then
+        return "MapShowBlessingObelisks"
+    end
+    return "MapShowSkillObelisks"
 end
 
-local function shouldRenderObelisk(obelisk, mode)
-    if mode == VISIBILITY_NONE then
-        return false
-    end
-    if mode == VISIBILITY_GENERAL_ONLY then
-        local t = obelisk.type
-        return t == nil or t == "" or t == NONE_TYPE
-    end
-    return true
+-- SandboxVars is nil before world load, so an unread option counts as hidden.
+local function shouldRenderObelisk(obelisk, sv)
+    return sv ~= nil and sv[mapOptionFor(obelisk.type)] == true
 end
 
 local originalRender = ISWorldMap.render
@@ -274,13 +263,9 @@ function ISWorldMap:render()
         return
     end
 
-    local mode = getVisibilityMode()
-    if mode == VISIBILITY_NONE then
-        return
-    end
-
+    local sv = SandboxVars and SandboxVars.SkillObelisk
     for _, obelisk in pairs(SurvivorSkillObeliskMapCache.obelisks) do
-        if shouldRenderObelisk(obelisk, mode) then
+        if shouldRenderObelisk(obelisk, sv) then
             renderObelisk(self, obelisk)
         end
     end
