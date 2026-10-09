@@ -181,10 +181,11 @@ AVCS.OnServerCommand = function(moduleName, command, arg)
         return
     end
 
+    -- sendServerCommand delivers an empty table as nil, so a server with no claims syncs nil
     if command == "fullSyncVehicleDB" then
-        AVCS.dbByVehicleSQLID = arg
+        AVCS.dbByVehicleSQLID = arg or {}
     elseif command == "fullSyncPlayerDB" then
-        AVCS.dbByPlayerID = arg
+        AVCS.dbByPlayerID = arg or {}
     elseif command == "updateClientClaimVehicle" then
         AVCS.updateClientClaimVehicle(arg)
     elseif command == "updateClientUnclaimVehicle" then
