@@ -27,6 +27,14 @@ public final class AdminCoreBridge {
 
     private AdminCoreBridge() {}
 
+    /** Replicate the actor's current state; this method never enables a power. */
+    @LuaMethod
+    public static void syncPowers(IsoPlayer actor) {
+        if (GameServer.server && actor != null && GameServer.isPlayerConnected(actor)) {
+            GameServer.sendPlayerExtraInfo(actor, null);
+        }
+    }
+
     private static boolean allowed(IsoPlayer actor, Capability cap) {
         return GameServer.server
                 && actor != null

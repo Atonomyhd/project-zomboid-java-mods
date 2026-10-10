@@ -20,22 +20,21 @@ function C.buildActionTree(entries)
                     depth = depth - 1,
                     children = {},
                     isGroup = true,
+                    sortOrder = entry.sortOrder,
                 }
                 groups[path] = group
                 children[#children + 1] = group
             end
+            groups[path].sortOrder = math.min(
+                tonumber(groups[path].sortOrder) or 1000,
+                tonumber(entry.sortOrder) or 1000
+            )
             children = groups[path].children
         end
         children[#children + 1] = entry
     end
     local function sort(nodes)
-        table.sort(nodes, function(a, b)
-            local at, bt = a.title:lower(), b.title:lower()
-            if at == bt then
-                return (a.id or a.category) < (b.id or b.category)
-            end
-            return at < bt
-        end)
+        table.sort(nodes, C.actionLess)
         for _, node in ipairs(nodes) do
             if node.isGroup then
                 sort(node.children)
@@ -50,16 +49,22 @@ function C.actionRows(tree, entries, section, query, expanded)
     local rows = {}
     query = (query or ""):match("^%s*(.-)%s*$")
     local function eligible(entry)
-        return not entry.action or not entry.action.hideUnavailable or entry.enabled
+        return not entry.hidden
+            and (not entry.action or not entry.action.hideUnavailable or entry.enabled)
     end
     if query ~= "" then
         for _, entry in ipairs(entries) do
             if
                 eligible(entry)
+                and entry.searchable ~= false
                 and C.matchesAction(
                     entry.title,
                     entry.category,
-                    (entry.keywords or "") .. " " .. entry.path,
+                    (entry.keywords or "")
+                        .. " "
+                        .. entry.path
+                        .. " "
+                        .. (entry.sourceCategory or ""),
                     section,
                     query,
                     entry.quick
@@ -90,6 +95,7 @@ function C.actionRows(tree, entries, section, query, expanded)
                 end
             elseif
                 eligible(entry)
+                and entry.visibleInNavigation ~= false
                 and C.matchesAction(
                     entry.title,
                     entry.category,

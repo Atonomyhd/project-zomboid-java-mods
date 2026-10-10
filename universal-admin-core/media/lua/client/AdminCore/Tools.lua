@@ -46,7 +46,6 @@ C.registerAction({
     title = "Broadcast announcement...",
     capability = Capability.DisplayServerMessage,
     keywords = "message restart warning broadcast",
-    quick = true,
     run = function()
         local dialog = ISTextBox:new(
             0,
@@ -81,8 +80,7 @@ C.registerAction({
 })
 C.registerAction({
     id = "core.vehicle",
-    group = { "Spawn" },
-    category = "Vehicles",
+    category = "Dashboard",
     title = "Spawn vehicle...",
     capability = Capability.ManipulateVehicle,
     run = function()
@@ -91,8 +89,7 @@ C.registerAction({
 })
 C.registerAction({
     id = "core.horde",
-    group = { "Zombies" },
-    category = "Events",
+    category = "World",
     title = "Zombie / horde manager...",
     capability = Capability.CreateHorde,
     keywords = "spawn remove zombies area population",
@@ -105,7 +102,6 @@ C.registerAction({
 })
 C.registerAction({
     id = "core.cleanup",
-    group = { "Items" },
     category = "World",
     title = "Remove dropped items in area...",
     capability = Capability.EditItem,
@@ -116,7 +112,6 @@ C.registerAction({
 })
 C.registerAction({
     id = "core.coordinates",
-    group = { "Travel" },
     category = "World",
     title = "Copy my coordinates",
     capability = Capability.TeleportToCoordinates,
@@ -137,7 +132,6 @@ C.registerAction({
 })
 C.registerAction({
     id = "core.teleport",
-    group = { "Travel" },
     category = "World",
     title = "Teleport to coordinates...",
     capability = Capability.TeleportToCoordinates,
@@ -183,7 +177,7 @@ C.registerAction({
 })
 C.registerAction({
     id = "core.mods",
-    category = "Mods",
+    category = "Server",
     title = "View active client mods",
     capability = Capability.ManipulateMods,
     tooltip = "Mods loaded by this client. Private server modules are not included.",
