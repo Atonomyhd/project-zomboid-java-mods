@@ -26,6 +26,23 @@ existing respawn settings stay attached to the same claim. See
 Drag a header to move a window and its bottom-right grip to resize it. Geometry
 and pins persist in the native client layout file.
 
+## Observe and Free Look
+
+Follow, Soft Follow and Free Camera keep the admin character in place. WASD pans
+Free Camera; Shift/Ctrl change speed, F focuses and Esc stops. The header button
+minimizes the observer to a status bar. Teleport To and Return are separate,
+server-checked actions; Teleport To works before observation starts.
+
+The server grants a short-lived observer region sized to the viewport, at most
+19 by 19 chunks. Terrain and nearby entity updates follow the accepted camera;
+the character's origin stays loaded. Stop, expiry and revocation release the
+region. Visibility and outdoor lighting changes apply only while rendering an
+authorized observer view. Remote lamps, interiors and some roof cutaways still
+have engine limits. See the [observer review](docs/OBSERVE-VISIBILITY-REVIEW.md).
+
+This PR contains no safehouse respawn selector, Combat Health or Lifestyle module.
+See the [operations review](ADMIN-OPERATIONS-REVIEW.md) for permissions and scope.
+
 ## Extension contract
 
 Register actions through AdminCore/Registry.lua. Check authorization on the server.
