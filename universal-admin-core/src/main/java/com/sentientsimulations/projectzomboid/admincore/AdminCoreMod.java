@@ -34,6 +34,8 @@ public final class AdminCoreMod implements ZomboidMod {
         }
         LuaManager.exposer.setExposed(AdminCoreBridge.class);
         LuaManager.exposer.exposeLikeJavaRecursively(AdminCoreBridge.class, LuaManager.env);
+        LuaManager.exposer.setExposed(SafehouseBoundaryBridge.class);
+        LuaManager.exposer.exposeLikeJavaRecursively(SafehouseBoundaryBridge.class, LuaManager.env);
         LOGGER.info("[Universal Admin Core] Server bridge exposed.");
     }
 }

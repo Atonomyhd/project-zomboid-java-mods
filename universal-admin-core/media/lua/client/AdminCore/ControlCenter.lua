@@ -9,6 +9,7 @@ require("AdminCore/OperationsClient")
 require("AdminCore/MiniAdmin")
 require("AdminCore/AdminPowers")
 require("AdminCore/DebugTools")
+require("AdminCore/SafehouseBoundary")
 
 local C = AdminCore
 if C.controlCenterInstalled then

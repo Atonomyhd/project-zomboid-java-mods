@@ -18,6 +18,11 @@ Faction search includes tags. Safehouse placement previews overlap and nearby
 claims; the server checks placement again. Membership actions keep native
 permissions. Tickets is removed from the User Panel, search and Compact Admin.
 
+Authorized admins can expand or redraw an existing safehouse from its detail
+window, with overlap feedback and recent audit history. Owner, members and
+existing respawn settings stay attached to the same claim. See
+[boundary editing and integration requirements](docs/SAFEHOUSE-BOUNDARY.md).
+
 Drag a header to move a window and its bottom-right grip to resize it. Geometry
 and pins persist in the native client layout file.
 
