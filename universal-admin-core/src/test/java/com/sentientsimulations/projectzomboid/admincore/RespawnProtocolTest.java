@@ -2,6 +2,7 @@ package com.sentientsimulations.projectzomboid.admincore;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.file.Path;
 import java.sql.Connection;
@@ -17,6 +18,7 @@ import se.krka.kahlua.j2se.J2SEPlatform;
 import se.krka.kahlua.vm.KahluaTable;
 import zombie.Lua.LuaManager;
 import zombie.characters.IsoPlayer;
+import zombie.characters.SurvivorDesc;
 import zombie.core.Core;
 import zombie.core.network.ByteBufferReader;
 import zombie.core.network.ByteBufferWriter;
@@ -134,11 +136,22 @@ class RespawnProtocolTest {
     private KahluaTable request(
             TestConnection connection, String command, String request, String id, Object offset)
             throws Exception {
+        return request(connection, 0, command, request, id, offset);
+    }
+
+    private KahluaTable request(
+            TestConnection connection,
+            int slot,
+            String command,
+            String request,
+            String id,
+            Object offset)
+            throws Exception {
         Map<?, ?> sessions = (Map<?, ?>) field(AdminCoreRespawnServer.class, "SESSIONS").get(null);
         Object session = sessions.get(connection);
         if (session != null) field(session.getClass(), "lastRequest").setLong(session, 0);
         KahluaTable args = LuaManager.platform.newTable();
-        args.rawset("playerIndex", 0.0);
+        args.rawset("playerIndex", (double) slot);
         args.rawset("requestId", request);
         if (id != null) args.rawset("houseId", id);
         if (offset != null) args.rawset("offset", offset);
@@ -424,6 +437,265 @@ class RespawnProtocolTest {
         assertNull(AdminCoreRespawnStore.pending(db, AdminCoreRespawnServer.account(alice, 0)));
     }
 
+    private void markProfileAlive() throws Exception {
+        try (var q = db.createStatement()) {
+            q.executeUpdate("UPDATE networkPlayers SET isDead=0");
+        }
+        db.commit();
+    }
+
+    private SavingPlayer deadPlayer(String username) throws Exception {
+        SavingPlayer player = allocate(SavingPlayer.class);
+        player.username = username;
+        player.descriptor = allocate(SurvivorDesc.class);
+        player.serialized = new byte[] {4, 5, 6};
+        player.dead = true;
+        return player;
+    }
+
+    @Test
+    void confirmedDeathSynchronizesLaggedProfileOnceBeforeOfferingSafehouse() throws Exception {
+        markProfileAlive();
+        SavingPlayer current = deadPlayer("Alice");
+        alice.mockPlayers[0] = current;
+        KahluaTable choices = request(alice, "choices", "lagged-death", null);
+        assertEquals(Boolean.TRUE, choices.rawget("enabled"));
+        assertEquals(1, ((KahluaTable) choices.rawget("rows")).len());
+        var saved = AdminCoreRespawnStore.read(db, AdminCoreRespawnServer.account(alice, 0));
+        assertTrue(saved.dead());
+        assertArrayEquals(current.serialized, saved.data());
+        assertEquals(1, current.serializations);
+        String region =
+                (String)
+                        request(alice, "choose", "lagged-choice", AdminCoreRespawnServer.key(house))
+                                .rawget("regionKey");
+        assertNotNull(region);
+        assertFalse(AdminCoreRespawnServer.begin(region, 0, alice));
+        assertEquals(1, current.serializations);
+    }
+
+    @Test
+    void confirmedDeathCanSynchronizeAtChooseWithoutPriorListRequest() throws Exception {
+        markProfileAlive();
+        SavingPlayer current = deadPlayer("Alice");
+        alice.mockPlayers[0] = current;
+        assertNotNull(
+                request(alice, "choose", "direct-choice", AdminCoreRespawnServer.key(house))
+                        .rawget("regionKey"));
+        assertEquals(1, current.serializations);
+        assertTrue(AdminCoreRespawnStore.read(db, AdminCoreRespawnServer.account(alice, 0)).dead());
+    }
+
+    @Test
+    void deadCurrentWithDifferentUsernameCannotOverwriteAuthenticatedProfile() throws Exception {
+        markProfileAlive();
+        SavingPlayer current = deadPlayer("Bob");
+        alice.mockPlayers[0] = current;
+        KahluaTable choices = request(alice, "choices", "wrong-identity", null);
+        assertEquals(0, ((KahluaTable) choices.rawget("rows")).len());
+        assertEquals(0, current.serializations);
+        var saved = AdminCoreRespawnStore.read(db, AdminCoreRespawnServer.account(alice, 0));
+        assertFalse(saved.dead());
+        assertArrayEquals(new byte[] {1}, saved.data());
+    }
+
+    @Test
+    void deadPrimaryCannotSynchronizeAnotherRequestedSlot() throws Exception {
+        markProfileAlive();
+        try (var q = db.createStatement()) {
+            q.executeUpdate(
+                    "INSERT INTO networkPlayers VALUES(2,'respawn-test','Alice','',1,100,100,0,241,0,'Old Bob','Bob',X'02')");
+        }
+        db.commit();
+        SavingPlayer primary = deadPlayer("Alice");
+        alice.mockPlayers[0] = primary;
+        KahluaTable choices = request(alice, 1, "choices", "other-slot", null, null);
+        assertEquals(0, ((KahluaTable) choices.rawget("rows")).len());
+        assertEquals(0, primary.serializations);
+        assertFalse(
+                AdminCoreRespawnStore.read(db, AdminCoreRespawnServer.account(alice, 0)).dead());
+        assertFalse(
+                AdminCoreRespawnStore.read(db, AdminCoreRespawnServer.account(alice, 1)).dead());
+        alice.mockPlayers[1] = primary;
+        choices = request(alice, 1, "choices", "wrong-split-identity", null, null);
+        assertEquals(0, ((KahluaTable) choices.rawget("rows")).len());
+        assertEquals(0, primary.serializations);
+        assertArrayEquals(
+                new byte[] {2},
+                AdminCoreRespawnStore.read(db, AdminCoreRespawnServer.account(alice, 1)).data());
+    }
+
+    @Test
+    void livingCurrentCannotSynchronizeLaggedProfile() throws Exception {
+        markProfileAlive();
+        SavingPlayer current = deadPlayer("Alice");
+        current.dead = false;
+        alice.mockPlayers[0] = current;
+        KahluaTable choices = request(alice, "choices", "still-alive", null);
+        assertEquals(0, ((KahluaTable) choices.rawget("rows")).len());
+        assertEquals(0, current.serializations);
+        assertFalse(
+                AdminCoreRespawnStore.read(db, AdminCoreRespawnServer.account(alice, 0)).dead());
+    }
+
+    @Test
+    void synchronizedDeathDoesNotBypassRevokedMembership() throws Exception {
+        markProfileAlive();
+        SavingPlayer current = deadPlayer("Alice");
+        alice.mockPlayers[0] = current;
+        house.setOwner("Other");
+        house.getPlayers().remove("Alice");
+        KahluaTable choices = request(alice, "choices", "revoked-death", null);
+        assertEquals(0, ((KahluaTable) choices.rawget("rows")).len());
+        assertEquals(1, current.serializations);
+        assertNull(
+                request(alice, "choose", "revoked-choice", AdminCoreRespawnServer.key(house))
+                        .rawget("regionKey"));
+        assertNull(AdminCoreRespawnStore.pending(db, AdminCoreRespawnServer.account(alice, 0)));
+    }
+
+    @Test
+    void nativeSerializationFailureNeverWritesNullDataOrOverwritesPriorProfile() throws Exception {
+        markProfileAlive();
+        SavingPlayer current = deadPlayer("Alice");
+        current.serializationFailure = true;
+        alice.mockPlayers[0] = current;
+        KahluaTable failure = request(alice, "choices", "save-failed", null);
+        assertNotNull(failure.rawget("message"));
+        assertNull(failure.rawget("rows"));
+        assertEquals(1, current.serializations);
+        var saved = AdminCoreRespawnStore.read(db, AdminCoreRespawnServer.account(alice, 0));
+        assertFalse(saved.dead());
+        assertArrayEquals(new byte[] {1}, saved.data());
+        assertTrue(
+                ((java.util.Queue<?>)
+                                field(ServerPlayerDB.class, "charactersToSave")
+                                        .get(ServerPlayerDB.getInstance()))
+                        .isEmpty());
+    }
+
+    @Test
+    void emptyNativeSnapshotIsRejectedBeforePriorProfileChanges() throws Exception {
+        markProfileAlive();
+        SavingPlayer current = deadPlayer("Alice");
+        current.serialized = new byte[0];
+        alice.mockPlayers[0] = current;
+        assertNotNull(request(alice, "choices", "empty-save", null).rawget("message"));
+        var saved = AdminCoreRespawnStore.read(db, AdminCoreRespawnServer.account(alice, 0));
+        assertFalse(saved.dead());
+        assertArrayEquals(new byte[] {1}, saved.data());
+    }
+
+    @Test
+    void failedNativeDatabaseWriteRejectsChoiceAndPreservesPriorProfile() throws Exception {
+        markProfileAlive();
+        try (var q = db.createStatement()) {
+            q.executeUpdate(
+                    "CREATE TRIGGER fail_dead_save BEFORE UPDATE ON networkPlayers WHEN NEW.isDead=1 BEGIN SELECT RAISE(ABORT,'save blocked'); END");
+        }
+        db.commit();
+        SavingPlayer current = deadPlayer("Alice");
+        alice.mockPlayers[0] = current;
+        KahluaTable failure = request(alice, "choices", "database-save-failed", null);
+        assertNotNull(failure.rawget("message"));
+        assertNull(failure.rawget("rows"));
+        var saved = AdminCoreRespawnStore.read(db, AdminCoreRespawnServer.account(alice, 0));
+        assertFalse(saved.dead());
+        assertArrayEquals(new byte[] {1}, saved.data());
+        assertEquals(1, current.serializations);
+        Map<?, ?> sessions = (Map<?, ?>) field(AdminCoreRespawnServer.class, "SESSIONS").get(null);
+        Object session = sessions.get(alice);
+        assertFalse(((boolean[]) field(session.getClass(), "negotiated").get(session))[0]);
+        assertTrue(
+                ((java.util.Queue<?>)
+                                field(ServerPlayerDB.class, "charactersToSave")
+                                        .get(ServerPlayerDB.getInstance()))
+                        .isEmpty());
+        assertFalse(AdminCoreRespawnServer.begin("normal", 0, alice));
+        assertEquals(1, current.serializations);
+    }
+
+    @Test
+    void confirmedDeathWritesSynchronouslyWithoutQueuingAnOutstandingSnapshot() throws Exception {
+        markProfileAlive();
+        SavingPlayer current = deadPlayer("Alice");
+        alice.mockPlayers[0] = current;
+        var queue = new RefusingSaveQueue();
+        field(ServerPlayerDB.class, "charactersToSave").set(ServerPlayerDB.getInstance(), queue);
+        var choices = request(alice, "choices", "synchronous-save", null);
+        assertEquals(1, ((KahluaTable) choices.rawget("rows")).len());
+        assertEquals(1, current.serializations);
+        assertTrue(queue.isEmpty());
+        assertArrayEquals(
+                current.serialized,
+                AdminCoreRespawnStore.read(db, AdminCoreRespawnServer.account(alice, 0)).data());
+    }
+
+    @Test
+    void accountChangeDuringSerializationCannotWriteTheCapturedSnapshot() throws Exception {
+        markProfileAlive();
+        var account = AdminCoreRespawnServer.account(alice, 0);
+        SavingPlayer current = deadPlayer("Alice");
+        current.duringSerialization = () -> alice.name = "Other";
+        alice.mockPlayers[0] = current;
+        assertNotNull(request(alice, "choices", "account-changed", null).rawget("message"));
+        assertEquals(1, current.serializations);
+        var saved = AdminCoreRespawnStore.read(db, account);
+        assertFalse(saved.dead());
+        assertArrayEquals(new byte[] {1}, saved.data());
+        assertNull(AdminCoreRespawnStore.read(db, AdminCoreRespawnServer.account(alice, 0)));
+    }
+
+    @Test
+    void creationJournalAppearingDuringSerializationPreventsSnapshotWrite() throws Exception {
+        var account = AdminCoreRespawnServer.account(alice, 0);
+        var previous = AdminCoreRespawnStore.read(db, account);
+        markProfileAlive();
+        SavingPlayer current = deadPlayer("Alice");
+        current.duringSerialization =
+                () -> {
+                    try {
+                        AdminCoreRespawnStore.begin(
+                                db,
+                                account,
+                                new AdminCoreRespawnStore.Pending(
+                                        "pending", "house", "Alice", Long.MAX_VALUE, previous));
+                    } catch (Exception failure) {
+                        throw new AssertionError(failure);
+                    }
+                };
+        alice.mockPlayers[0] = current;
+        assertNotNull(request(alice, "choices", "journal-changed", null).rawget("message"));
+        assertEquals(1, current.serializations);
+        var saved = AdminCoreRespawnStore.read(db, account);
+        assertFalse(saved.dead());
+        assertArrayEquals(new byte[] {1}, saved.data());
+        assertNotNull(AdminCoreRespawnStore.pending(db, account));
+    }
+
+    @Test
+    void pendingCreationJournalPreventsDeathSynchronizationOverNewProfile() throws Exception {
+        var account = AdminCoreRespawnServer.account(alice, 0);
+        var previous = AdminCoreRespawnStore.read(db, account);
+        AdminCoreRespawnStore.begin(
+                db,
+                account,
+                new AdminCoreRespawnStore.Pending(
+                        "pending", "house", "Alice", Long.MAX_VALUE, previous));
+        try (var q = db.createStatement()) {
+            q.executeUpdate("UPDATE networkPlayers SET isDead=0,data=X'02'");
+        }
+        db.commit();
+        SavingPlayer current = deadPlayer("Alice");
+        alice.mockPlayers[0] = current;
+        assertNotNull(request(alice, "choices", "pending-save", null).rawget("message"));
+        assertEquals(0, current.serializations);
+        var saved = AdminCoreRespawnStore.read(db, account);
+        assertFalse(saved.dead());
+        assertArrayEquals(new byte[] {2}, saved.data());
+        assertNotNull(AdminCoreRespawnStore.pending(db, account));
+    }
+
     @Test
     void unavailableDatabaseRepliesWithActionableFailureInsteadOfLeavingChooserWaiting()
             throws Exception {
@@ -591,5 +863,41 @@ class RespawnProtocolTest {
 
         @Override
         public void setUsername(String username) {}
+    }
+
+    public static class SavingPlayer extends TestPlayer {
+        SurvivorDesc descriptor;
+        byte[] serialized;
+        int serializations;
+        boolean serializationFailure;
+        boolean dead;
+        Runnable duringSerialization;
+
+        @Override
+        public SurvivorDesc getDescriptor() {
+            return descriptor;
+        }
+
+        @Override
+        public boolean isDead() {
+            return dead;
+        }
+
+        @Override
+        public void save(ByteBuffer bytes, boolean net) throws IOException {
+            serializations++;
+            if (serializationFailure)
+                throw new IOException("Simulated player serialization failure");
+            bytes.put(serialized);
+            if (duringSerialization != null) duringSerialization.run();
+        }
+    }
+
+    private static class RefusingSaveQueue extends ConcurrentLinkedQueue<Object> {
+        @Override
+        public boolean add(Object snapshot) {
+            throw new AssertionError(
+                    "Death synchronization must not enqueue a delayed player save.");
+        }
     }
 }

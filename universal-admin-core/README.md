@@ -5,7 +5,7 @@ and client. This module does not require the ATF Economy module.
 
 ## Safehouse respawn selection
 
-UAC 0.2.8-alpha adds eligible owned/member safehouses to the existing character
+UAC 0.2.9-alpha adds eligible owned/member safehouses to the existing character
 creation location screen. Enable `SafehouseAllowRespawn` and install matching UAC
 on server and clients. The permanent Safehouse UI checkbox is hidden when the
 server confirms support. Each selection applies to that character creation only.
@@ -14,6 +14,8 @@ The server rechecks membership and the claim before creating and joining the
 character. Normal and custom locations keep their existing providers. The vanilla
 flow was tested locally; the live server's custom map selector was unavailable.
 See [respawn details](docs/SAFEHOUSE-RESPAWN.md).
+This update fixes missing safehouse choices immediately after a confirmed death.
+Failed requests keep normal spawn locations available.
 
 The Admin Panel provides searchable categories and native actions. The User List
 provides selected-player administration, membership tools and observation. Ordinary

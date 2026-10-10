@@ -1,6 +1,7 @@
 package com.sentientsimulations.projectzomboid.admincore;
 
 import java.sql.Connection;
+import java.util.Arrays;
 import java.util.Map;
 import java.util.UUID;
 import java.util.WeakHashMap;
@@ -127,6 +128,62 @@ public final class AdminCoreRespawnServer {
                 : null;
     }
 
+    private static AdminCoreRespawnStore.Profile synchronizeDeadProfile(
+            Connection db,
+            AdminCoreRespawnStore.Account account,
+            AdminCoreRespawnStore.Profile profile,
+            UdpConnection connection,
+            int slot,
+            String username,
+            IsoPlayer current)
+            throws Exception {
+        if (!enabled()
+                || profile == null
+                || profile.dead()
+                || username == null
+                || current == null
+                || connection.getPlayerAt(slot) != current
+                || !current.isDead()
+                || !username.equals(current.getUsername())) return profile;
+        if (profile.data() == null
+                || profile.data().length == 0
+                || AdminCoreRespawnStore.pending(db, account) != null)
+            throw new IllegalStateException("Existing player save needs recovery.");
+
+        // B42.21 normally saves players every three minutes. Construct its native snapshot once:
+        // its constructor swallows serialization failures, so validate before writing any data.
+        Class<?> type = Class.forName("zombie.savefile.ServerPlayerDB$NetworkCharacterData");
+        var constructor =
+                type.getDeclaredConstructor(IsoPlayer.class, int.class, UdpConnection.class);
+        constructor.setAccessible(true);
+        Object snapshot = constructor.newInstance(current, slot, connection);
+        var bufferField = type.getDeclaredField("buffer");
+        bufferField.setAccessible(true);
+        byte[] buffer = (byte[]) bufferField.get(snapshot);
+        if (buffer == null || buffer.length == 0)
+            throw new IllegalStateException("Dead player could not be saved safely.");
+        if (connection.getPlayerAt(slot) != current
+                || !current.isDead()
+                || !username.equals(current.getUsername())
+                || !account.equals(account(connection, slot))
+                || AdminCoreRespawnStore.pending(db, account) != null)
+            throw new IllegalStateException("Respawning player changed during saving.");
+        // Use the native writer directly: no delayed snapshot may outlive this respawn request.
+        var writer =
+                ServerPlayerDB.class.getDeclaredMethod("serverUpdateNetworkCharacterInt", type);
+        writer.setAccessible(true);
+        writer.invoke(ServerPlayerDB.getInstance(), snapshot);
+        var saved = AdminCoreRespawnStore.read(db, account);
+        // The native writer catches SQL failures and rolls back, so successful readback is
+        // required.
+        if (saved == null
+                || saved.id() != profile.id()
+                || !saved.dead()
+                || !Arrays.equals(buffer, saved.data()))
+            throw new IllegalStateException("Dead player save did not complete.");
+        return saved;
+    }
+
     /** Called before native ClientCommand's null-character rejection; foreign packets untouched. */
     @SuppressWarnings("PMD.CloseResource") // ServerPlayerDB owns the borrowed connection lifecycle.
     public static boolean command(ByteBufferReader reader, UdpConnection connection) {
@@ -172,10 +229,16 @@ public final class AdminCoreRespawnServer {
                 return true;
             }
             ServerPlayerDB.getInstance().process();
-            AdminCoreRespawnStore.recoverUnwritten(db, account(connection, slot));
-            var profile = AdminCoreRespawnStore.read(db, account(connection, slot));
+            var account = account(connection, slot);
+            AdminCoreRespawnStore.recoverUnwritten(db, account);
+            var profile = AdminCoreRespawnStore.read(db, account);
             String username = authenticatedName(connection, slot, profile);
             IsoPlayer current = connection.getPlayerAt(slot);
+            if (command.equals("choices") || command.equals("choose")) {
+                profile =
+                        synchronizeDeadProfile(
+                                db, account, profile, connection, slot, username, current);
+            }
             boolean eligible =
                     enabled()
                             && username != null
