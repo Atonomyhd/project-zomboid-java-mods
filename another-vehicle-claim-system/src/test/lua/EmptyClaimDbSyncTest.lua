@@ -117,7 +117,11 @@ check(
     "Unclaimed vehicle containers open on a server with no claims"
 )
 
-callbacks.OnServerCommand("AVCS", "fullSyncVehicleDB", { [42] = { OwnerPlayerID = "owner", CarModel = "Base.CarNormal" } })
+callbacks.OnServerCommand(
+    "AVCS",
+    "fullSyncVehicleDB",
+    { [42] = { OwnerPlayerID = "owner", CarModel = "Base.CarNormal" } }
+)
 callbacks.OnServerCommand("AVCS", "fullSyncPlayerDB", { owner = { [42] = true } })
 vehicle.getModData = function()
     return { SQLID = 42 }

@@ -1,5 +1,8 @@
 require("ISUI/Maps/ISWorldMap")
 
+AVCS.MapRenderer = AVCS.MapRenderer or { filterEnabled = true }
+local state = AVCS.MapRenderer
+
 --
 -- getDetailedVehicleList - moved from jar-injected Lua to vanilla client Lua
 --
@@ -18,8 +21,14 @@ local cachedVehicles, cachedRevision, cachedPlayer, cachedLanguage, cacheUntil
 local function invalidateVehicles()
     cachedVehicles = nil
 end
-Events.OnSafehousesChanged.Add(invalidateVehicles)
-Events.SyncFaction.Add(invalidateVehicles)
+state.invalidate = invalidateVehicles
+if not state.invalidateHook then
+    state.invalidateHook = function()
+        state.invalidate()
+    end
+    Events.OnSafehousesChanged.Add(state.invalidateHook)
+    Events.SyncFaction.Add(state.invalidateHook)
+end
 
 local function getDetailedVehicleList()
     local player = getPlayer()
@@ -116,9 +125,8 @@ end
 -- Filter option for map UI
 --
 
-local avcsFilterEnabled = true
-
-local avcsFilterOption = {}
+state.filterOption = state.filterOption or {}
+local avcsFilterOption = state.filterOption
 function avcsFilterOption:getName()
     return "Claimed Vehicles"
 end
@@ -126,17 +134,28 @@ function avcsFilterOption:getType()
     return "boolean"
 end
 function avcsFilterOption:getValue()
-    return avcsFilterEnabled
+    return state.filterEnabled
 end
 function avcsFilterOption:setValue(v)
-    avcsFilterEnabled = v
+    state.filterEnabled = v
 end
 
 WorldMapOptions_visibleOptionsHooks = WorldMapOptions_visibleOptionsHooks or {}
 
-table.insert(WorldMapOptions_visibleOptionsHooks, function(result)
-    table.insert(result, avcsFilterOption)
-end)
+state.optionsHook = state.optionsHook
+    or function(result)
+        table.insert(result, state.filterOption)
+    end
+local registered = false
+for _, hook in ipairs(WorldMapOptions_visibleOptionsHooks) do
+    if hook == state.optionsHook then
+        registered = true
+        break
+    end
+end
+if not registered then
+    table.insert(WorldMapOptions_visibleOptionsHooks, state.optionsHook)
+end
 
 -- Monkey-patch getVisibleOptions/synchUI to iterate the shared hooks table.
 -- Multiple mods add hooks to the same table; only the first mod to load does the patch.
@@ -245,17 +264,22 @@ end
 -- Patch ISWorldMap:render()
 --
 
-local originalRender = ISWorldMap.render
-
-function ISWorldMap:render()
-    originalRender(self)
-
-    if not avcsFilterEnabled then
+state.render = function(mapUI)
+    if not state.filterEnabled then
         return
     end
-
     local vehicles = getDetailedVehicleList()
     for _, vehicle in ipairs(vehicles) do
-        renderVehiclePoint(self, vehicle)
+        renderVehiclePoint(mapUI, vehicle)
     end
+end
+
+-- Keep one wrapper and update its delegate on reload, preserving other mods' wrappers.
+if not state.renderWrapper then
+    local originalRender = ISWorldMap.render
+    state.renderWrapper = function(self)
+        originalRender(self)
+        state.render(self)
+    end
+    ISWorldMap.render = state.renderWrapper
 end
