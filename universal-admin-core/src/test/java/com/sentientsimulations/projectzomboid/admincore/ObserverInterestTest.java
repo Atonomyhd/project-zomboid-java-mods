@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import java.util.*;
 import net.bytebuddy.ByteBuddy;
 import net.bytebuddy.dynamic.ClassFileLocator;
+import net.bytebuddy.dynamic.loading.ClassLoadingStrategy;
 import net.bytebuddy.jar.asm.*;
 import net.bytebuddy.pool.TypePool;
 import org.junit.jupiter.api.*;
@@ -115,6 +116,34 @@ class ObserverInterestTest {
         }
     }
 
+    static final class WorldObject extends IsoObject {
+        IsoGridSquare square;
+
+        @Override
+        public IsoGridSquare getSquare() {
+            return square;
+        }
+
+        @Override
+        public float getX() {
+            return square.x;
+        }
+
+        @Override
+        public float getY() {
+            return square.y;
+        }
+    }
+
+    WorldObject object(int x, int y, int z) throws Exception {
+        var value = allocate(WorldObject.class);
+        value.square = allocate(IsoGridSquare.class);
+        value.square.x = x;
+        value.square.y = y;
+        value.square.z = z;
+        return value;
+    }
+
     @SuppressWarnings("removal")
     static <T> T allocate(Class<T> type) throws Exception {
         var field = sun.misc.Unsafe.class.getDeclaredField("theUnsafe");
@@ -197,6 +226,147 @@ class ObserverInterestTest {
         GlobalModData.instance.remove("UniversalAdminCore.OperationsPolicy.v1");
         if (previousPolicy != null)
             GlobalModData.instance.add("UniversalAdminCore.OperationsPolicy.v1", previousPolicy);
+    }
+
+    @Test
+    void stormObjectInterestKeepsOriginAndRequiresCurrentFloorAndAuthorization() throws Exception {
+        var remote = object(1000, 1000, 0);
+        assertFalse(AdminCoreObserverInterest.replicationRelevant(connection, 1000, 1000, remote));
+        assertTrue(AdminCoreObserverInterest.start(actor, target, "objects", "FOLLOW"));
+        assertTrue(AdminCoreObserverInterest.replicationRelevant(connection, 1000, 1000, remote));
+        assertFalse(
+                AdminCoreObserverInterest.replicationRelevant(
+                        connection, 1000, 1000, object(1000, 1000, 1)));
+        assertFalse(
+                AdminCoreObserverInterest.replicationRelevant(
+                        connection, 1080, 1000, object(1080, 1000, 0)));
+        assertFalse(AdminCoreObserverInterest.replicationRelevant(connection, 1000, 1000, null));
+        assertTrue(
+                AdminCoreObserverInterest.replicationRelevant(
+                        connection, 10, 10, object(10, 10, 1)),
+                "Physical origin relevance remains native, including other floors");
+        assertFalse(
+                AdminCoreObserverInterest.replicationRelevant(
+                        targetConnection, 10, 10, object(10, 10, 0)));
+        target.pz = 1;
+        assertTrue(
+                AdminCoreObserverInterest.replicationRelevant(
+                        connection, 1000, 1000, object(1000, 1000, 1)));
+        assertFalse(AdminCoreObserverInterest.replicationRelevant(connection, 1000, 1000, remote));
+        target.pz = 0;
+        GameServer.server = false;
+        assertFalse(AdminCoreObserverInterest.replicationRelevant(connection, 1000, 1000, remote));
+        GameServer.server = true;
+        assertTrue(AdminCoreObserverInterest.start(actor, target, "objects", "FOLLOW"));
+        connection.connected = false;
+        assertFalse(AdminCoreObserverInterest.replicationRelevant(connection, 1000, 1000, remote));
+        connection.connected = true;
+        assertTrue(AdminCoreObserverInterest.start(actor, target, "objects", "FOLLOW"));
+        actor.role = new Role("ordinary");
+        assertFalse(AdminCoreObserverInterest.replicationRelevant(connection, 1000, 1000, remote));
+        assertFalse(AdminCoreObserverInterest.start(actor, target, "forged", "FOLLOW"));
+    }
+
+    @Test
+    void stormHelperWeavesAndRunsRealObjectGateWithAnExpiringLease() throws Exception {
+        var name = AdminCoreObserverReplicationPatch.TARGETS.get(1);
+        var locator = ClassFileLocator.ForClassLoader.ofSystemLoader();
+        var pool = TypePool.Default.of(locator);
+        var transformed =
+                new AdminCoreObserverReplicationPatch(name)
+                        .dynamicType(
+                                locator,
+                                pool,
+                                new ByteBuddy().redefine(pool.describe(name).resolve(), locator))
+                        .make()
+                        .load(getClass().getClassLoader(), ClassLoadingStrategy.Default.CHILD_FIRST)
+                        .getLoaded();
+        var method =
+                transformed.getDeclaredMethod("isRelevant", UdpConnection.class, IsoObject.class);
+        method.setAccessible(true);
+        var remote = object(1000, 1000, 0);
+        assertEquals(false, method.invoke(null, connection, remote));
+        assertTrue(AdminCoreObserverInterest.start(actor, target, "objects", "FOLLOW"));
+        assertEquals(true, method.invoke(null, connection, remote));
+        assertEquals(false, method.invoke(null, connection, object(1000, 1000, 1)));
+        var old = leases().get(connection).get(actor);
+        leases().get(connection)
+                .put(
+                        actor,
+                        new AdminCoreObserverInterest.Lease(
+                                old.actor(),
+                                old.target(),
+                                old.connection(),
+                                old.targetConnection(),
+                                old.id(),
+                                old.mode(),
+                                old.x(),
+                                old.y(),
+                                old.z(),
+                                old.radius(),
+                                System.currentTimeMillis() - 1,
+                                old.sequence(),
+                                old.movedAt()));
+        assertEquals(false, method.invoke(null, connection, remote));
+        assertEquals(true, method.invoke(null, connection, object(10, 10, 0)));
+        assertTrue(
+                leases().isEmpty(),
+                "Expired interest is removed rather than extending object access");
+    }
+
+    @Test
+    void realStormHelperCallSitesOnlyRedirectOutgoingRelevance() throws Exception {
+        var locator = ClassFileLocator.ForClassLoader.ofSystemLoader();
+        var pool = TypePool.Default.of(locator);
+        for (String name : AdminCoreObserverReplicationPatch.TARGETS) {
+            byte[] bytes =
+                    new AdminCoreObserverReplicationPatch(name)
+                            .dynamicType(
+                                    locator,
+                                    pool,
+                                    new ByteBuddy()
+                                            .redefine(pool.describe(name).resolve(), locator))
+                            .make()
+                            .load(
+                                    getClass().getClassLoader(),
+                                    ClassLoadingStrategy.Default.CHILD_FIRST)
+                            .getBytes();
+            int[] replaced = {0};
+            new ClassReader(bytes)
+                    .accept(
+                            new ClassVisitor(Opcodes.ASM9) {
+                                @Override
+                                public MethodVisitor visitMethod(
+                                        int access,
+                                        String method,
+                                        String descriptor,
+                                        String signature,
+                                        String[] exceptions) {
+                                    return new MethodVisitor(Opcodes.ASM9) {
+                                        @Override
+                                        public void visitMethodInsn(
+                                                int opcode,
+                                                String owner,
+                                                String called,
+                                                String desc,
+                                                boolean itf) {
+                                            if (owner.endsWith("/AdminCoreObserverInterest")) {
+                                                assertEquals("replicationRelevant", called);
+                                                assertTrue(
+                                                        Set.of(
+                                                                        "run",
+                                                                        "isRelevant",
+                                                                        "runLightSwitch")
+                                                                .contains(method));
+                                                replaced[0]++;
+                                            }
+                                        }
+                                    };
+                                }
+                            },
+                            0);
+            assertEquals(name.endsWith("BroadcastGate") ? 1 : 2, replaced[0], name);
+        }
     }
 
     @Test

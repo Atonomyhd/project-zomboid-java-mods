@@ -31,7 +31,11 @@ public final class AdminCoreMod implements ZomboidMod {
                         new AdminCoreObserverInterestPatch("zombie.vehicles.VehicleManager"),
                         new AdminCoreObserverInterestPatch("zombie.popman.NetworkZombiePacker"),
                         new AdminCoreObserverInterestPatch(
-                                "zombie.popman.animal.AnimalSynchronizationManager"))
+                                "zombie.popman.animal.AnimalSynchronizationManager"),
+                        new AdminCoreObserverReplicationPatch(
+                                "io.pzstorm.storm.connection.StormGameEntityBroadcastGate"),
+                        new AdminCoreObserverReplicationPatch(
+                                "io.pzstorm.storm.connection.StormSyncIsoObjectGate"))
                 : List.of(
                         new AdminCoreObservePatch(),
                         new AdminCoreObserveFramePatch(),

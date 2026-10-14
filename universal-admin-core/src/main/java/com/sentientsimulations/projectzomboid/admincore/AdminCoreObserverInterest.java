@@ -7,6 +7,7 @@ import se.krka.kahlua.vm.KahluaTable;
 import zombie.characters.Capability;
 import zombie.characters.IsoPlayer;
 import zombie.core.raknet.UdpConnection;
+import zombie.entity.GameEntity;
 import zombie.network.GameServer;
 import zombie.network.ServerMap;
 import zombie.world.moddata.GlobalModData;
@@ -33,6 +34,17 @@ public final class AdminCoreObserverInterest {
                                 name, false, AdminCoreObserverInterest.class.getClassLoader());
                 if (type.getDeclaredField(AdminCoreObserverInterestPatch.MARKER).getType()
                         != boolean.class) return false;
+            }
+            for (String name : AdminCoreObserverReplicationPatch.TARGETS) {
+                try {
+                    var type =
+                            Class.forName(
+                                    name, false, AdminCoreObserverInterest.class.getClassLoader());
+                    if (type.getDeclaredField(AdminCoreObserverReplicationPatch.MARKER).getType()
+                            != boolean.class) return false;
+                } catch (ClassNotFoundException olderStorm) {
+                    // Older Storm versions do not replace these native broadcast loops.
+                }
             }
             patchesReady = true;
             return true;
@@ -434,6 +446,24 @@ public final class AdminCoreObserverInterest {
 
     public static boolean relevant(UdpConnection connection, float x, float y) {
         return connection.isRelevantTo(x, y) || observerRelevant(connection, x, y);
+    }
+
+    public static boolean replicationRelevant(
+            UdpConnection connection, float x, float y, Object entity) {
+        if (connection == null) return false;
+        if (connection.isRelevantTo(x, y)) return true;
+        if (!(entity instanceof GameEntity placed)) return false;
+        var square = placed.getSquare();
+        if (square == null) return false;
+        double z = square.getZ();
+        Map<IsoPlayer, Lease> leases = INTEREST.get(connection);
+        if (leases == null) return false;
+        long now = System.currentTimeMillis();
+        for (Lease lease : leases.values()) {
+            if (!live(lease, now)) remove(lease);
+            else if (z == Math.floor(lease.center(2)) && contains(lease, x, y)) return true;
+        }
+        return false;
     }
 
     public static boolean relevantWithin(
