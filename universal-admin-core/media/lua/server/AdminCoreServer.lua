@@ -3,6 +3,7 @@ if not isServer() then
 end
 
 require("AdminCore/ObserverServer")
+require("AdminCore/NoiseServer")
 
 AdminCoreServer = AdminCoreServer or {}
 local S = AdminCoreServer

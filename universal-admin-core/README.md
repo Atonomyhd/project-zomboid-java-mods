@@ -13,6 +13,9 @@ Compact Admin provides personal pinned actions. Right-click an action to pin it.
 Grouped Admin Powers support search and server-checked changes. Unavailable debug
 tools are hidden; developer tools require Debug mode.
 
+Noise actions use the server's current player position and native radius choices,
+including 500 tiles. The server checks Debug Context permission and limits repeats.
+
 Safehouse and faction lists have name/owner search and alphabetical sorting.
 Faction search includes tags. Safehouse placement previews overlap and nearby
 claims; the server checks placement again. Membership actions keep native
@@ -39,6 +42,9 @@ the character's origin stays loaded. Stop, expiry and revocation release the
 region. Visibility and outdoor lighting changes apply only while rendering an
 authorized observer view. Remote lamps, interiors and some roof cutaways still
 have engine limits. See the [observer review](docs/OBSERVE-VISIBILITY-REVIEW.md).
+
+Storm's object and crafting updates also honor the authorized observer region
+on the current floor. Normal player relevance and interaction checks stay native.
 
 This PR contains no safehouse respawn selector, Combat Health or Lifestyle module.
 See the [operations review](ADMIN-OPERATIONS-REVIEW.md) for permissions and scope.

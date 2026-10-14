@@ -197,6 +197,15 @@ register(
 )
 C.actions["context.removeZombies"].group = { "Zombies" }
 
+local function makeNoise(square, player, radius, volume)
+    if isClient() then
+        -- The server derives the square and volume. No client WorldSound packet is sent.
+        sendClientCommand(player, "UniversalAdminCore", "makeNoise", { radius = radius })
+    else
+        AdminContextMenu.onMakeNoise(square, player, radius, volume)
+    end
+end
+
 for _, radius in ipairs({ 10, 20, 50, 100, 200, 500 }) do
     local r = radius
     register(
@@ -205,10 +214,13 @@ for _, radius in ipairs({ 10, 20, 50, 100, 200, 500 }) do
         "Events",
         "debug sound attract zombies radius",
         function()
-            return (adminToolsAllowed() or C.debugContextAllowed()) and hasCurrentSquare()
+            return C.debugContextAllowed() and hasCurrentSquare()
         end,
         function()
-            return AdminContextMenu and AdminContextMenu.onMakeNoise
+            if isClient() then
+                return makeNoise
+            end
+            return AdminContextMenu and AdminContextMenu.onMakeNoise and makeNoise
         end,
         function()
             return { getPlayer():getCurrentSquare(), getPlayer(), r, 100 }

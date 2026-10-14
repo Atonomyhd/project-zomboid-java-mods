@@ -77,6 +77,9 @@ dofile(game .. "/media/lua/client/DebugUIs/AdminContextMenu.lua")
 dofile(game .. "/media/lua/client/DebugUIs/DebugContextMenu.lua")
 dofile(game .. "/media/lua/client/DebugUIs/DebugMenu/ISDebugMenu.lua")
 local received
+sendClientCommand = function(p, module, command, args)
+    received = { p, module, command, args }
+end
 BrushToolManager = {
     openPanel = function(p)
         effects = effects + 1
@@ -140,9 +143,39 @@ C.runAction(C.actions["context.noise.20"])
 square = { changed = true }
 confirmation()
 check(
-    received[1] == square and received[2] == player and received[3] == 20,
-    "Location-based tool uses current square at execution"
+    received[1] == player
+        and received[2] == "UniversalAdminCore"
+        and received[3] == "makeNoise"
+        and received[4].radius == 20
+        and received[4].x == nil
+        and received[4].volume == nil,
+    "Noise sends the selected radius to the server without client coordinates or volume"
 )
+received = nil
+C.runAction(C.actions["context.noise.500"])
+confirmation()
+check(
+    received and received[4].radius == 500,
+    "The 500-tile option uses the authorized command route"
+)
+isClient = function()
+    return false
+end
+debug = true
+C.runAction(C.actions["context.noise.20"])
+confirmation()
+check(
+    received[1] == square and received[2] == player and received[3] == 20,
+    "Single-player debug keeps the native sound callback"
+)
+AdminContextMenu.onMakeNoise = nil
+check(
+    not C.canRun(C.actions["context.noise.20"]),
+    "Missing native noise callback disables the single-player tool"
+)
+isClient = function()
+    return true
+end
 square = nil
 check(
     not C.canRun(C.actions["context.noise.20"]),
