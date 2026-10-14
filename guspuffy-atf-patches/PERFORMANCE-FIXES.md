@@ -51,3 +51,8 @@ These changes address specific repeated work and stale state. Native/process RAM
 has not been attributed to a component. No live server deployment, high-population
 performance measurement or general cure for disappearing entities is claimed. Test
 disconnect/reconnect, long travel, claim changes and radio removal before rollout.
+
+The October 14 follow-up also replaces ATF Core's nonempty role-name checks with
+`CanSetupSafehouses` for staff safehouse operations, dumps and alerts. Owner release stays
+available. The authority regression passes in Lua 5.1 and PZ 42.21.0 Kahlua, including
+ordinary/custom roles, missing role support and immediate permission loss.

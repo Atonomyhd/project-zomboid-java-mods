@@ -9,7 +9,7 @@ try {
     & lua "$PSScriptRoot/tests/Performance.lua"
     if ($LASTEXITCODE -ne 0) { throw 'Compatibility regression failed' }
     if ($VendorFixtures) {
-        foreach ($name in @('VendorMemory','SafehouseSync')) {
+        foreach ($name in @('VendorMemory','SafehouseSync','SafehouseAuthority')) {
             & lua "$PSScriptRoot/tests/$name.lua" $VendorFixtures
             if ($LASTEXITCODE -ne 0) { throw "Vendor regression failed: $name" }
         }

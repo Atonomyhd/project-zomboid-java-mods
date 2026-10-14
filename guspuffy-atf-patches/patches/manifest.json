@@ -2,7 +2,7 @@
   {
     "path": "mod-after_the_fall_core_b42/42.14/media/lua/server/ATF_SafetySystem/ATF_SafehouseGuard_Server.lua",
     "before": "4ef976a665a9af213add2a03f0ef29f2e90fd871f6e0475a53e04914dbdcbadd",
-    "after": "6339aacf466404a2556f4dd98af57d04385e2da0f49dda67c0db6a29b58865aa",
+    "after": "acd64de157d45b1a66df0b696adbb0081d7d57b83d425efa9c786f3555e77b6d",
     "module": "atf-core"
   },
   {

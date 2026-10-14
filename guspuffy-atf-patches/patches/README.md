@@ -28,6 +28,9 @@ Changes:
   during reconciliation. Unchanged full broadcasts are suppressed. Activity-only timer changes
   use native/on-demand updates. Install both ATF client and server patches together. The new
   ATF Patches server helper completes native/chat synchronization after direct offline creation.
+  Staff release, assignment, forced release, diagnostic dumps and alerts require the current
+  `CanSetupSafehouses` capability. Owners can still request release of their own claim.
+  Role names alone do not grant access; missing capability support denies staff operations.
 - Lifestyle spreads its 121x121 startup scan over callbacks with a 64-square budget, cancels
   when the player leaves the area/floor or dies, and removes unloaded objects from its registry.
 - Error Magnifier processes at most 32 new entries per callback, retains 256 unique errors,
