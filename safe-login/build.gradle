@@ -13,7 +13,9 @@ modInfo {
 [b][url=https://discord.gg/after-the-fall]After The Fall[/url][/b] — The #1 multiplayer server in the world
 [hr][/hr]
 
-If the player moves before the timer expires, protection is cancelled immediately.'''
+If the player moves before the timer expires, protection is cancelled immediately.
+
+Tested and compatible with 42.21.0'''
 }
 
 uploadWorkshop.enabled = false

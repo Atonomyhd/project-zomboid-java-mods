@@ -8,8 +8,6 @@
 
 require("ISUI/ISModalRichText")
 
-local VISIBILITY_NONE = 3
-
 local function readSandbox()
     return SandboxVars and SandboxVars.SkillObelisk or nil
 end
@@ -28,12 +26,12 @@ local function getRecoveryPercent(sv)
     return math.floor(percent + 0.5)
 end
 
-local function obelisksShownOnMap(sv)
-    local mode = sv and sv.MapObeliskVisibility
-    if type(mode) ~= "number" then
-        return true
+-- Blessing obelisks do not recover skills, so they do not count here.
+local function recoveryObelisksShownOnMap(sv)
+    if sv == nil then
+        return false
     end
-    return mode ~= VISIBILITY_NONE
+    return sv.MapShowGeneralObelisks == true or sv.MapShowSkillObelisks == true
 end
 
 local function buildText(percent, mapMention)
@@ -64,7 +62,7 @@ local function onPlayerDeath(player)
     end
 
     local playerNum = player:getPlayerNum() or 0
-    local text = buildText(percent, obelisksShownOnMap(sv))
+    local text = buildText(percent, recoveryObelisksShownOnMap(sv))
     local width = 480
     local height = 160
     local screenLeft = getPlayerScreenLeft(playerNum)

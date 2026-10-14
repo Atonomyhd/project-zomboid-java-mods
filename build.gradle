@@ -296,6 +296,7 @@ subprojects { subproj ->
 		inputs.property("tiledef", info.tiledef.orElse(""))
 		inputs.property("requires", info.requires.orElse([]))
 		inputs.property("requiresStorm", info.requiresStorm.orElse(true))
+		inputs.property("modVersion", info.modVersion.orElse("1.0"))
 
 		outputs.file(outputFile)
 

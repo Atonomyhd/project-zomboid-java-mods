@@ -11,8 +11,8 @@ import zombie.characters.IsoPlayer;
 
 /**
  * Handles the {@code SurvivorSkillObelisk:syncHiddenSkills} client command. Mirrors Lifestyles'
- * {@code LSHiddenSkills} hidden-skill table (Yoga, Inventing) from the client onto the server-side
- * {@link IsoPlayer} modData.
+ * {@code LSHiddenSkills} hidden-skill table (Yoga, Inventing, PingPong) from the client onto the
+ * server-side {@link IsoPlayer} modData.
  *
  * <p>Why this exists: same gap as {@link SyncLearnedSongsHandler} — Lifestyles earns hidden-skill
  * XP in client Lua only (HSMng.lua), B42 player persistence is server-authoritative, and

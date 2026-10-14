@@ -7,4 +7,16 @@ module Base
             volume = 0.5,
         }
     }
+
+    sound SurvivorSkillObeliskHeartbeat
+    {
+        category = Object,
+        is3D = true,
+        clip {
+            file = media/sound/obelisk-heartbeat.ogg,
+            distanceMin = 4,
+            distanceMax = 40,
+            volume = 0.9,
+        }
+    }
 }

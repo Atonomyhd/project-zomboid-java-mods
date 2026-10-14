@@ -5,6 +5,7 @@ import static io.pzstorm.storm.logging.StormLogger.LOGGER;
 import io.pzstorm.storm.event.core.SubscribeEvent;
 import io.pzstorm.storm.event.lua.OnNewGameEvent;
 import java.sql.Connection;
+import java.sql.SQLException;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import zombie.characters.IsoPlayer;
@@ -27,6 +28,13 @@ import zombie.characters.skills.PerkFactory;
  * thread, the SQLite write goes through {@link DeathEventHandler#submitDbWrite} — the shared FIFO
  * queue guarantees a queued death write always reads the dying character's baseline before the
  * respawn's replace lands.
+ *
+ * <p>A new character holds no recovered XP, so the recovery ledger is cleared with the baseline. A
+ * death that never reaches {@code OnPlayerDeath} leaves the dead character's ledger behind, and the
+ * next recovery would subtract it from a character that never received it. Only the server that
+ * records deaths clears the ledger: a server with {@link DeathEventHandler#recordsDeaths()} off
+ * shares another server's database, and a character created there is not the one the ledger
+ * describes.
  */
 public final class CharacterBaselineHandler {
 
@@ -47,6 +55,7 @@ public final class CharacterBaselineHandler {
                     steamId);
             return;
         }
+        RecoverSkillsHandler.notifyDeath(steamId, username);
         Map<String, Float> baseline = new LinkedHashMap<>();
         for (PerkFactory.Perk perk : PerkFactory.PerkList) {
             baseline.put(perk.getId(), player.getXp().getXP(perk));
@@ -54,19 +63,39 @@ public final class CharacterBaselineHandler {
         DeathEventHandler.submitDbWrite(() -> writeBaseline(steamId, username, baseline));
     }
 
+    static void recordNewCharacter(
+            SurvivorSkillObeliskRepository repo,
+            long steamId,
+            String username,
+            Map<String, Float> baseline,
+            boolean clearRecovery)
+            throws SQLException {
+        repo.replaceCharacterBaseline(steamId, username, baseline);
+        if (clearRecovery) {
+            repo.deleteRecovery(steamId, username);
+        }
+    }
+
     private static void writeBaseline(long steamId, String username, Map<String, Float> baseline) {
         try (SurvivorSkillObeliskDatabase db =
                 new SurvivorSkillObeliskDatabase(DeathEventHandler.getDbPath())) {
             Connection conn = db.getConnection();
             conn.setAutoCommit(false);
-            new SurvivorSkillObeliskRepository(conn)
-                    .replaceCharacterBaseline(steamId, username, baseline);
+            boolean clearRecovery = DeathEventHandler.recordsDeaths();
+            recordNewCharacter(
+                    new SurvivorSkillObeliskRepository(conn),
+                    steamId,
+                    username,
+                    baseline,
+                    clearRecovery);
             conn.commit();
             LOGGER.info(
-                    "[SurvivorSkillObelisk] Recorded creation baseline for {} ({}): {} perks",
+                    "[SurvivorSkillObelisk] Recorded creation baseline for {} ({}): {} perks,"
+                            + " recovery ledger {}",
                     username,
                     steamId,
-                    baseline.size());
+                    baseline.size(),
+                    clearRecovery ? "cleared" : "kept");
         } catch (Exception e) {
             LOGGER.error(
                     "[SurvivorSkillObelisk] Failed to record creation baseline for {} ({})",

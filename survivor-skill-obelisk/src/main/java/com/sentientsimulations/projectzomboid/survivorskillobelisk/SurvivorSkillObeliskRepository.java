@@ -49,12 +49,25 @@ public class SurvivorSkillObeliskRepository {
             Double isaddon) {}
 
     /**
-     * A Lifestyles hidden-skill row ({@code Yoga}, {@code Inventing}) — mirrors one entry of the
-     * player's {@code LSHiddenSkills} mod-data table: {@code {level, xp, xpForNextLevel}}.
+     * A Lifestyles hidden-skill row ({@code Yoga}, {@code Inventing}, {@code PingPong}) — mirrors
+     * one entry of the player's {@code LSHiddenSkills} mod-data table: {@code {level, xp,
+     * xpForNextLevel}}.
      */
     public record HiddenSkillRow(String skill, int level, double xp, double xpForNextLevel) {}
 
     public record ObeliskTypeRow(int x, int y, int z, String type) {}
+
+    public record BlessingRow(
+            String world,
+            long steamId,
+            String username,
+            int obeliskX,
+            int obeliskY,
+            int obeliskZ,
+            int bonusPercent,
+            long grantedTs,
+            double grantedWorldHours,
+            double expiresWorldHours) {}
 
     public record AmbitionRow(
             String name,
@@ -104,6 +117,9 @@ public class SurvivorSkillObeliskRepository {
             SELECT skill, level, xp, xp_for_next_level
             FROM death_hidden_skills WHERE death_id = ?""";
 
+    private static final String FIND_INVENTIONS_BY_DEATH =
+            "SELECT inv_data FROM death_inventions WHERE death_id = ? ORDER BY id DESC LIMIT 1";
+
     private static final String LIST_AMBITIONS_BY_DEATH =
             """
             SELECT name, category, texture, completed, is_active, is_passive,
@@ -147,6 +163,9 @@ public class SurvivorSkillObeliskRepository {
             """
             INSERT INTO death_hidden_skills (death_id, skill, level, xp, xp_for_next_level)
             VALUES (?, ?, ?, ?, ?)""";
+
+    private static final String INSERT_INVENTIONS =
+            "INSERT INTO death_inventions (death_id, inv_data) VALUES (?, ?)";
 
     private static final String FIND_RECOVERY_GRANTS =
             "SELECT perk, xp FROM recovery_skills WHERE steam_id = ? AND username = ?";
@@ -210,6 +229,34 @@ public class SurvivorSkillObeliskRepository {
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""";
 
     private final Connection connection;
+
+    private static final String UPSERT_BLESSING =
+            """
+            INSERT INTO blessings (world, steam_id, username, obelisk_x, obelisk_y, obelisk_z,
+                                   bonus_percent, granted_ts, granted_world_hours,
+                                   expires_world_hours)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(world, steam_id, username) DO UPDATE SET
+                obelisk_x = excluded.obelisk_x,
+                obelisk_y = excluded.obelisk_y,
+                obelisk_z = excluded.obelisk_z,
+                bonus_percent = excluded.bonus_percent,
+                granted_ts = excluded.granted_ts,
+                granted_world_hours = excluded.granted_world_hours,
+                expires_world_hours = excluded.expires_world_hours
+            """;
+
+    private static final String FIND_BLESSING =
+            "SELECT * FROM blessings WHERE world = ? AND steam_id = ? AND username = ?";
+
+    private static final String LIST_ACTIVE_BLESSINGS =
+            "SELECT * FROM blessings WHERE world = ? AND expires_world_hours > ?";
+
+    private static final String DELETE_BLESSING =
+            "DELETE FROM blessings WHERE world = ? AND steam_id = ? AND username = ?";
+
+    private static final String DELETE_EXPIRED_BLESSINGS =
+            "DELETE FROM blessings WHERE world = ? AND expires_world_hours <= ?";
 
     public SurvivorSkillObeliskRepository(Connection connection) {
         this.connection = connection;
@@ -339,6 +386,18 @@ public class SurvivorSkillObeliskRepository {
             stmt.setInt(3, level);
             stmt.setDouble(4, xp);
             stmt.setDouble(5, xpForNextLevel);
+            stmt.executeUpdate();
+        }
+    }
+
+    /**
+     * One JSON document per death holding the whole Lifestyles {@code invData} table; see {@link
+     * InventionsData} for the shape and {@link LuaTableJson} for the encoding.
+     */
+    public void insertInventions(long deathId, String invDataJson) throws SQLException {
+        try (PreparedStatement stmt = connection.prepareStatement(INSERT_INVENTIONS)) {
+            stmt.setLong(1, deathId);
+            stmt.setString(2, invDataJson);
             stmt.executeUpdate();
         }
     }
@@ -503,6 +562,16 @@ public class SurvivorSkillObeliskRepository {
             }
         }
         return rows;
+    }
+
+    /** The death's {@code invData} JSON, or null when nothing was recorded. */
+    public String findInventionsByDeath(long deathId) throws SQLException {
+        try (PreparedStatement stmt = connection.prepareStatement(FIND_INVENTIONS_BY_DEATH)) {
+            stmt.setLong(1, deathId);
+            try (ResultSet rs = stmt.executeQuery()) {
+                return rs.next() ? rs.getString("inv_data") : null;
+            }
+        }
     }
 
     public List<AmbitionRow> listAmbitionsByDeath(long deathId) throws SQLException {
@@ -708,6 +777,91 @@ public class SurvivorSkillObeliskRepository {
             stmt.setInt(3, z);
             stmt.executeUpdate();
         }
+    }
+
+    /**
+     * Inserts or refreshes the single blessing row a character holds in a world. Rows are scoped
+     * per world because each server's expiry is in its own world-age hours.
+     */
+    public void upsertBlessing(BlessingRow row) throws SQLException {
+        try (PreparedStatement stmt = connection.prepareStatement(UPSERT_BLESSING)) {
+            stmt.setString(1, row.world());
+            stmt.setLong(2, row.steamId());
+            stmt.setString(3, row.username());
+            stmt.setInt(4, row.obeliskX());
+            stmt.setInt(5, row.obeliskY());
+            stmt.setInt(6, row.obeliskZ());
+            stmt.setInt(7, row.bonusPercent());
+            stmt.setLong(8, row.grantedTs());
+            stmt.setDouble(9, row.grantedWorldHours());
+            stmt.setDouble(10, row.expiresWorldHours());
+            stmt.executeUpdate();
+        }
+    }
+
+    /** Returns {@code null} when the character has never been blessed (or the row was deleted). */
+    public BlessingRow findBlessing(String world, long steamId, String username)
+            throws SQLException {
+        try (PreparedStatement stmt = connection.prepareStatement(FIND_BLESSING)) {
+            stmt.setString(1, world);
+            stmt.setLong(2, steamId);
+            stmt.setString(3, username);
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (rs.next()) {
+                    return readBlessing(rs);
+                }
+            }
+        }
+        return null;
+    }
+
+    /** Every blessing of the world whose expiry is still ahead of {@code nowWorldHours}. */
+    public List<BlessingRow> listActiveBlessings(String world, double nowWorldHours)
+            throws SQLException {
+        List<BlessingRow> rows = new ArrayList<>();
+        try (PreparedStatement stmt = connection.prepareStatement(LIST_ACTIVE_BLESSINGS)) {
+            stmt.setString(1, world);
+            stmt.setDouble(2, nowWorldHours);
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    rows.add(readBlessing(rs));
+                }
+            }
+        }
+        return rows;
+    }
+
+    /** No-op when the character holds no blessing in the world. */
+    public void deleteBlessing(String world, long steamId, String username) throws SQLException {
+        try (PreparedStatement stmt = connection.prepareStatement(DELETE_BLESSING)) {
+            stmt.setString(1, world);
+            stmt.setLong(2, steamId);
+            stmt.setString(3, username);
+            stmt.executeUpdate();
+        }
+    }
+
+    /** Housekeeping: drops the world's rows whose expiry is at or before {@code nowWorldHours}. */
+    public int deleteExpiredBlessings(String world, double nowWorldHours) throws SQLException {
+        try (PreparedStatement stmt = connection.prepareStatement(DELETE_EXPIRED_BLESSINGS)) {
+            stmt.setString(1, world);
+            stmt.setDouble(2, nowWorldHours);
+            return stmt.executeUpdate();
+        }
+    }
+
+    private static BlessingRow readBlessing(ResultSet rs) throws SQLException {
+        return new BlessingRow(
+                rs.getString("world"),
+                rs.getLong("steam_id"),
+                rs.getString("username"),
+                rs.getInt("obelisk_x"),
+                rs.getInt("obelisk_y"),
+                rs.getInt("obelisk_z"),
+                rs.getInt("bonus_percent"),
+                rs.getLong("granted_ts"),
+                rs.getDouble("granted_world_hours"),
+                rs.getDouble("expires_world_hours"));
     }
 
     private static Double getNullableDouble(ResultSet rs, String column) throws SQLException {

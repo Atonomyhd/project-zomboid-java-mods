@@ -72,7 +72,8 @@ public final class RecoverSkillsHandler {
             List<SurvivorSkillObeliskRepository.WatchedMediaRow> watchedMedia,
             List<SurvivorSkillObeliskRepository.LearnedSongRow> learnedSongs,
             List<SurvivorSkillObeliskRepository.AmbitionRow> ambitions,
-            List<SurvivorSkillObeliskRepository.HiddenSkillRow> hiddenSkills) {}
+            List<SurvivorSkillObeliskRepository.HiddenSkillRow> hiddenSkills,
+            String inventionsJson) {}
 
     /**
      * The new {@code {level, xp}} a hidden skill should be driven to; see {@link
@@ -118,7 +119,10 @@ public final class RecoverSkillsHandler {
 
     private RecoverSkillsHandler() {}
 
-    /** Called from the main thread when a player dies — invalidates any in-flight recovery. */
+    /**
+     * Called from the main thread when a player dies or starts a new character — invalidates any
+     * in-flight recovery.
+     */
     static void notifyDeath(long steamId, String username) {
         DEATH_EPOCHS.merge(inFlightKey(steamId, username), 1L, Long::sum);
     }
@@ -287,6 +291,10 @@ public final class RecoverSkillsHandler {
                     SurvivorSkillObeliskConfig.isRecoverHiddenSkills()
                             ? repo.listHiddenSkillsByDeath(req.deathId())
                             : null;
+            String inventionsJson =
+                    SurvivorSkillObeliskConfig.isRecoverInventions()
+                            ? repo.findInventionsByDeath(req.deathId())
+                            : null;
             conn.commit();
             return new QueryResult(
                     obeliskType,
@@ -298,7 +306,8 @@ public final class RecoverSkillsHandler {
                     watchedMedia,
                     learnedSongs,
                     ambitions,
-                    hiddenSkills);
+                    hiddenSkills,
+                    inventionsJson);
         } catch (Exception e) {
             LOGGER.error(
                     "[SurvivorSkillObelisk] recoverSkills failed for {} ({}) death id={}",
@@ -479,7 +488,8 @@ public final class RecoverSkillsHandler {
             // as a literal XP change (modulo the protein/strength tweak inside AddXP, which we
             // accept since recovery% is already a fudgeable knob). callLua/remote/haloText all
             // false: this is a restore, not earned XP — no Lua hooks, no halo floaters.
-            player.getXp().AddXP(perk, delta, false, false, false, false);
+            ObeliskBlessingXpBoost.runUnboosted(
+                    () -> player.getXp().AddXP(perk, delta, false, false, false, false));
             float afterXp = player.getXp().getXP(perk);
             int afterLevel = player.getPerkLevel(perk);
             // Ledger from the observed change, not the requested delta — if AddXP clamped or
@@ -602,6 +612,11 @@ public final class RecoverSkillsHandler {
         }
         if (result.hiddenSkills() != null && !result.hiddenSkills().isEmpty()) {
             if (applyHiddenSkillsAuthoritatively(player, result.hiddenSkills())) {
+                modDataMutated = true;
+            }
+        }
+        if (result.inventionsJson() != null) {
+            if (applyInventionsAuthoritatively(player, result.inventionsJson())) {
                 modDataMutated = true;
             }
         }
@@ -888,6 +903,49 @@ public final class RecoverSkillsHandler {
     }
 
     /**
+     * Mirror the client's {@code applyInventions}: decode the death's {@code invData} snapshot and
+     * merge it into {@code modData.invData} through {@link InventionsData#merge}. Nothing here is
+     * scaled by the recovery percent; an invention is known or it isn't, like a recipe.
+     */
+    private static boolean applyInventionsAuthoritatively(IsoPlayer player, String inventionsJson) {
+        KahluaTable modData = player.getModData();
+        if (modData == null) {
+            return false;
+        }
+        KahluaTable saved = LuaTableJson.decode(inventionsJson, LuaManager.platform::newTable);
+        if (saved == null) {
+            LOGGER.warn(
+                    "[SurvivorSkillObelisk] recoverSkills: inventions snapshot for {} failed to"
+                            + " decode; skipping",
+                    player.getUsername());
+            return false;
+        }
+        try {
+            KahluaTable live;
+            if (modData.rawget(InventionsData.MOD_DATA_KEY) instanceof KahluaTable existing) {
+                live = existing;
+            } else {
+                live = LuaManager.platform.newTable();
+                modData.rawset(InventionsData.MOD_DATA_KEY, live);
+            }
+            boolean mutated = InventionsData.merge(saved, live, LuaManager.platform::newTable);
+            LOGGER.info(
+                    "[SurvivorSkillObelisk] recoverSkills: inventions for {}: {} saved entries,"
+                            + " live table {}",
+                    player.getUsername(),
+                    InventionsData.countEntries(saved),
+                    mutated ? "updated" : "unchanged");
+            return mutated;
+        } catch (Throwable t) {
+            LOGGER.warn(
+                    "[SurvivorSkillObelisk] recoverSkills: inventions failed for {}: {}",
+                    player.getUsername(),
+                    t.getMessage());
+            return false;
+        }
+    }
+
+    /**
      * Pure math: what a hidden skill should be driven to, or {@code null} to leave it alone.
      * Max-wins — a higher saved level replaces the entry, an equal level only ever raises the
      * within-level XP, a lower one is a no-op — so recovery never downgrades live progress and
@@ -1069,6 +1127,14 @@ public final class RecoverSkillsHandler {
                 hidden.rawset(i++, t);
             }
             reply.rawset("hiddenSkills", hidden);
+        }
+
+        if (result.inventionsJson() != null) {
+            KahluaTable inventions =
+                    LuaTableJson.decode(result.inventionsJson(), LuaManager.platform::newTable);
+            if (inventions != null) {
+                reply.rawset("inventions", inventions);
+            }
         }
 
         return reply;

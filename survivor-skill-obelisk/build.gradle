@@ -50,7 +50,7 @@ modInfo {
 	workshopIdStage = ''
 	workshopIdProd = '3755686015'
 	description = '''[h1]Survivor Skill Obelisk[/h1]
-An in-world obelisk that carries part of a dead character's progression forward to their next life. On death the server snapshots the character's skills, books, recipes, watched media, and Lifestyles ambitions to a SQLite database in the save folder. When the next character finds a placed obelisk, they recover from one of their past lives.
+An in-world obelisk that carries part of a dead character's progression forward to their next life. On death the server snapshots the character's skills, books, recipes, watched media, and Lifestyles ambitions to a SQLite database in the save folder. When the next character finds a placed obelisk, they recover from one of their past lives. Admins can instead configure an obelisk as an [b]Obelisk Blessing[/b]: right-click it to receive a timed XP boost to every skill (duration and bonus percent are sandbox options, and the bonus can exceed 100%), including Lifestyles Yoga and Meditation. A green obelisk moodle shows while the blessing is active.
 
 Special thank you to [b]NiteMan[/b] for the incredible obelisk and monolith sprites!
 
@@ -72,6 +72,7 @@ Special thank you to [b]NiteMan[/b] for the incredible obelisk and monolith spri
 [*][b]Watched VHS and CDs[/b]: per-tape line counts, so finished tapes stay finished.
 [*][b]Lifestyles learned songs[/b]: per-instrument song lists.
 [*][b]Lifestyles ambitions[/b]: in-progress and completed ambitions with their goal progress.
+[*][b]Lifestyles inventions[/b]: every invention and toy researched, with improvement levels and production counts.
 [/list]
 
 [hr][/hr]
@@ -100,14 +101,17 @@ Admins can right-click a placed obelisk and pick [b]Configure Obelisk[/b] to bin
 [*][b]Recover Watched VHS / CDs[/b]: toggle recorded media recovery. Default on.
 [*][b]Recover Learned Songs (Lifestyles)[/b]: toggle Lifestyles instrument song recovery. Default on. No effect if Lifestyles is not installed.
 [*][b]Recover Ambitions (Lifestyles)[/b]: toggle Lifestyles ambition recovery. Default on. Numeric goal progress is scaled by Skill Recovery (%). No effect if Lifestyles is not installed.
+[*][b]Recover Inventions (Lifestyles)[/b]: toggle Lifestyles invention research recovery. Default on. Never takes progress away and is not scaled by Skill Recovery (%). No effect if Lifestyles is not installed.
 [*][b]Skill Recovery (%)[/b]: 0 to 100, default 100. Scales perk XP and ambition goal progress.
+[*][b]Obelisk Proximity Alert (tiles)[/b]: default 10. When a player outside your faction and safehouses is within this many tiles of an obelisk, its glow pulses and a heartbeat plays at the stone. Staff never trigger it. 0 turns it off.
+[*][b]Show General / Skill / Blessing Obelisks On Map[/b]: three checkboxes, one per obelisk type, each default off. Tick one to show that type on the world map.
 [*][b]Obelisk Curse[/b]: default on. Obelisks cannot be destroyed by players or zombies; a player who tries to sledgehammer one is struck dead by its curse. Turn off to simply block the attempt instead. Admins can always remove obelisks with the brush tool.
 [/list]
 
 [hr][/hr]
 
-Tested and compatible with 42.20.0'''
-	modVersion = '1.0.0'
+Tested and compatible with 42.21.0'''
+	modVersion = '1.2.0'
 	pack = 'survivor_skill_obelisk'
 	tiledef = 'survivor_skill_obelisk 8101'
 }

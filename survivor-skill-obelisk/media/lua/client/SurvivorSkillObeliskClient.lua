@@ -2,10 +2,14 @@
 -- SurvivorSkillObeliskClient.lua
 -- Right-click on a placed obelisk -> "Recover Skills" context menu entry ->
 -- ISCollapsableWindow with the player's past deaths fetched from the server.
+-- Blessing-type obelisks show "Receive Obelisk Blessing" instead (see
+-- SurvivorSkillObeliskBlessing.lua).
 --
 
 require("ISUI/ISCollapsableWindowJoypad")
 require("TimedActions/RecoverSkillsAction")
+require("TimedActions/ObeliskBlessingAction")
+require("SurvivorSkillObeliskBlessing")
 require("SurvivorSkillObeliskSongRepair")
 
 local MODULE = "SurvivorSkillObelisk"
@@ -20,6 +24,8 @@ local SYNC_RECIPES_AND_BOOKS = 1 + 4
 local SPRITE_PREFIX = "atf_obelisks_"
 local DEFAULT_LIMIT = 50
 local NONE_TYPE = "None"
+local BLESSING_TYPE = "Blessing"
+local BLESSING_LABEL = "Obelisk Blessing"
 
 local SurvivorSkillObelisk = {}
 local openWindow = nil
@@ -82,6 +88,9 @@ end
 local function perkDisplayName(typeId)
     if typeId == nil or typeId == "" or typeId == NONE_TYPE then
         return NONE_TYPE
+    end
+    if typeId == BLESSING_TYPE then
+        return BLESSING_LABEL
     end
     local perk = PerkFactory.Perks.FromString(typeId)
     if perk == nil then
@@ -464,6 +473,7 @@ function ConfigureObeliskWindow:createChildren()
     self.skillCombo:initialise()
     self.skillCombo:instantiate()
     self.skillCombo:addOptionWithData(NONE_TYPE, NONE_TYPE)
+    self.skillCombo:addOptionWithData(BLESSING_LABEL, BLESSING_TYPE)
     for _, perk in ipairs(collectSkillPerks()) do
         self.skillCombo:addOptionWithData(perk.name, perk.id)
     end
@@ -657,11 +667,63 @@ function SurvivorSkillObelisk.openRecoverWindow(worldobjects, playerNum)
 end
 
 ---------------------------------------------------------------------------
+-- Blessing
+---------------------------------------------------------------------------
+
+-- Obelisk types arrive through SurvivorSkillObeliskMap's cache; nil means the
+-- list hasn't landed yet, and the menu falls back to Recover Skills.
+local function cachedObeliskType(obj)
+    local square = obj and obj:getSquare() or nil
+    local cache = SurvivorSkillObeliskMapCache and SurvivorSkillObeliskMapCache.obelisks
+    if square == nil or cache == nil then
+        return nil
+    end
+    local key = tostring(square:getX())
+        .. ","
+        .. tostring(square:getY())
+        .. ","
+        .. tostring(square:getZ())
+    local entry = cache[key]
+    return entry and entry.type or nil
+end
+
+function SurvivorSkillObelisk.receiveBlessing(worldobjects, playerNum)
+    playerNum = playerNum or 0
+    local obj = findObeliskInWorldObjects(worldobjects)
+    local square = obj and obj:getSquare() or nil
+    local character = getSpecificPlayer(playerNum)
+    if square == nil or character == nil then
+        return
+    end
+    if luautils.walkAdj(character, square, true) then
+        ISTimedActionQueue.add(
+            ObeliskBlessingAction:new(character, square:getX(), square:getY(), square:getZ())
+        )
+    end
+end
+
+local function addBlessingOption(context, worldobjects, player)
+    local option = context:addOption(
+        "Receive Obelisk Blessing",
+        worldobjects,
+        SurvivorSkillObelisk.receiveBlessing,
+        player
+    )
+    local tooltip = ISToolTip:new()
+    tooltip:initialise()
+    tooltip:setVisible(false)
+    tooltip:setName("Obelisk Blessing")
+    tooltip.description = SurvivorSkillObeliskBlessing.tooltipText()
+    option.toolTip = tooltip
+end
+
+---------------------------------------------------------------------------
 -- Context menu hook
 ---------------------------------------------------------------------------
 
 local function onFillWorldObjectContextMenu(player, context, worldobjects, test)
-    if findObeliskInWorldObjects(worldobjects) == nil then
+    local obelisk = findObeliskInWorldObjects(worldobjects)
+    if obelisk == nil then
         return
     end
     -- On controller, PZ calls this once with test=true just to see if any handler
@@ -670,12 +732,16 @@ local function onFillWorldObjectContextMenu(player, context, worldobjects, test)
     if test == true then
         return ISWorldObjectContextMenu.setTest()
     end
-    context:addOption(
-        "Recover Skills",
-        worldobjects,
-        SurvivorSkillObelisk.openRecoverWindow,
-        player
-    )
+    if cachedObeliskType(obelisk) == BLESSING_TYPE then
+        addBlessingOption(context, worldobjects, player)
+    else
+        context:addOption(
+            "Recover Skills",
+            worldobjects,
+            SurvivorSkillObelisk.openRecoverWindow,
+            player
+        )
+    end
     if isPlayerAdmin() then
         context:addOption(
             "Configure Obelisk",
@@ -915,7 +981,7 @@ local function applyAmbitions(player, ambitions)
     end)
 end
 
--- Lifestyles hidden skills (Yoga, Inventing) live at modData.LSHiddenSkills[skill] =
+-- Lifestyles hidden skills (Yoga, Inventing, PingPong) live at modData.LSHiddenSkills[skill] =
 -- {level, xp, xpForNextLevel} (see Lifestyles' HSMng.lua). Payload xp is already scaled
 -- by Skill Recovery (%) server-side. Max-wins merge, mirroring the server's
 -- applyHiddenSkillsAuthoritatively: a higher saved level replaces the entry, an equal
@@ -951,6 +1017,83 @@ local function applyHiddenSkills(player, hiddenSkills)
     end)
 end
 
+-- Lifestyles invention research lives at modData.invData (see Lifestyles' InvWorkbenchMenu.lua):
+-- specialMax / specialMax_lvl10 scalars plus one nested entry per invention, or false once
+-- forgotten. Same merge as the server's InventionsData.merge: scalars take the max, a missing or
+-- forgotten invention is restored whole, one held on both sides keeps whichever has more research
+-- done, and numCreated takes the max. Nothing is scaled by Skill Recovery (%).
+local function deepCopyLua(value)
+    if type(value) ~= "table" then
+        return value
+    end
+    local copy = {}
+    for k, v in pairs(value) do
+        copy[k] = deepCopyLua(v)
+    end
+    return copy
+end
+
+local function inventionProgress(entry)
+    local score = 0
+    if type(entry) == "table" and type(entry.improvementData) == "table" then
+        for _, pair in pairs(entry.improvementData) do
+            if type(pair) == "table" and type(pair[1]) == "number" then
+                score = score + pair[1]
+            end
+        end
+    end
+    return score
+end
+
+-- workCost is a cached material list Lifestyles regenerates whenever it is false or missing.
+local function copyInventionEntry(entry)
+    local copy = {}
+    for k, v in pairs(entry) do
+        if k ~= "workCost" then
+            copy[k] = deepCopyLua(v)
+        end
+    end
+    return copy
+end
+
+local function applyInventions(player, inventions)
+    if type(inventions) ~= "table" then
+        return
+    end
+    local modData = player:getModData()
+    if modData == nil then
+        return
+    end
+    if type(modData.invData) ~= "table" then
+        modData.invData = {}
+    end
+    local live = modData.invData
+    for name, saved in pairs(inventions) do
+        if name == "specialMax" then
+            if type(saved) == "number" and saved > (tonumber(live.specialMax) or 1) then
+                live.specialMax = saved
+            end
+        elseif name == "specialMax_lvl10" then
+            if saved == true then
+                live.specialMax_lvl10 = true
+            end
+        elseif name ~= "lsWkID" and type(saved) == "table" then
+            local current = live[name]
+            if type(current) ~= "table" then
+                live[name] = copyInventionEntry(saved)
+            elseif inventionProgress(saved) > inventionProgress(current) then
+                local copy = copyInventionEntry(saved)
+                if (tonumber(current.numCreated) or 0) > (tonumber(copy.numCreated) or 0) then
+                    copy.numCreated = current.numCreated
+                end
+                live[name] = copy
+            elseif (tonumber(saved.numCreated) or 0) > (tonumber(current.numCreated) or 0) then
+                current.numCreated = saved.numCreated
+            end
+        end
+    end
+end
+
 local function onRecoveredData(args)
     local player = getSpecificPlayer(0)
     if player == nil or args == nil then
@@ -964,6 +1107,7 @@ local function onRecoveredData(args)
     applyLearnedSongs(player, args.learnedSongs)
     applyAmbitions(player, args.ambitions)
     applyHiddenSkills(player, args.hiddenSkills)
+    applyInventions(player, args.inventions)
     sendSyncPlayerFields(player, SYNC_RECIPES_AND_BOOKS)
     HaloTextHelper.addGoodText(player, "Skills recovered")
 end

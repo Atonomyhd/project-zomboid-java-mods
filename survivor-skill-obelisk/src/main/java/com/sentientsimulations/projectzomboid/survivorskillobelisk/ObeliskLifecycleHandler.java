@@ -13,7 +13,6 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import zombie.iso.IsoGridSquare;
 import zombie.iso.IsoObject;
-import zombie.iso.sprite.IsoSprite;
 
 /**
  * Keeps the {@code obelisk_types} table in sync with the world: on placement, ensures a {@code
@@ -29,7 +28,6 @@ import zombie.iso.sprite.IsoSprite;
  */
 public final class ObeliskLifecycleHandler {
 
-    private static final String SPRITE_PREFIX = "atf_obelisks_";
     private static final String NONE_TYPE = "None";
 
     private record PendingOp(int x, int y, int z, boolean placement) {}
@@ -157,17 +155,6 @@ public final class ObeliskLifecycleHandler {
     }
 
     private static boolean isObelisk(IsoObject obj) {
-        if (obj == null) {
-            return false;
-        }
-        IsoSprite sprite = obj.getSprite();
-        if (sprite == null) {
-            return false;
-        }
-        String name = sprite.getName();
-        if (name == null || !name.startsWith(SPRITE_PREFIX)) {
-            return false;
-        }
-        return !name.contains("_on_");
+        return ObeliskPlacement.isObelisk(obj);
     }
 }

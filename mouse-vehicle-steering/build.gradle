@@ -10,7 +10,9 @@ modInfo {
 
 [h2]Sponsors[/h2]
 [b][url=https://discord.gg/after-the-fall]After The Fall[/url][/b] — The #1 multiplayer server in the world
-[hr][/hr]'''
+[hr][/hr]
+
+Tested and compatible with 42.21.0'''
 }
 
 uploadWorkshop.enabled = false

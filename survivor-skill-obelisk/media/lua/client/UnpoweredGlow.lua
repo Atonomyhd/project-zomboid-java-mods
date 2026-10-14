@@ -422,6 +422,24 @@ local function dropLightsAndCollectPositions(oldEntry, cell)
     return positions
 end
 
+-- Visits every light currently tracked by configs whose name starts with
+-- namePrefix: fn(cfg, x, y, z, light). cfg.r/g/b are the base color the
+-- light was created with, so callers that tint a light can restore it.
+function UnpoweredGlow.forEachLight(namePrefix, fn)
+    local prefixLen = #namePrefix
+    for i = 1, #configs do
+        local cfg = configs[i]
+        if string.sub(cfg.name, 1, prefixLen) == namePrefix then
+            for k, light in pairs(cfg.lights) do
+                local x, y, z = parseKey(k)
+                if x ~= nil then
+                    fn(cfg, x, y, z, light)
+                end
+            end
+        end
+    end
+end
+
 function UnpoweredGlow.register(config)
     assert(type(config) == "table", "UnpoweredGlow.register: config must be a table")
     validateMatcher(config)

@@ -168,6 +168,18 @@ public class SurvivorSkillObeliskDatabase implements AutoCloseable {
             "CREATE INDEX IF NOT EXISTS idx_death_hidden_skills_death "
                     + "ON death_hidden_skills(death_id)";
 
+    private static final String CREATE_DEATH_INVENTIONS =
+            """
+            CREATE TABLE IF NOT EXISTS death_inventions (
+                id       INTEGER PRIMARY KEY AUTOINCREMENT,
+                death_id INTEGER NOT NULL,
+                inv_data TEXT NOT NULL,
+                FOREIGN KEY (death_id) REFERENCES deaths(id)
+            )""";
+
+    private static final String CREATE_DEATH_INVENTIONS_INDEX =
+            "CREATE INDEX IF NOT EXISTS idx_death_inventions_death ON death_inventions(death_id)";
+
     private static final String CREATE_RECOVERIES =
             """
             CREATE TABLE IF NOT EXISTS recoveries (
@@ -211,6 +223,22 @@ public class SurvivorSkillObeliskDatabase implements AutoCloseable {
                 PRIMARY KEY (x, y, z)
             )""";
 
+    private static final String CREATE_BLESSINGS =
+            """
+            CREATE TABLE IF NOT EXISTS blessings (
+                world                TEXT NOT NULL,
+                steam_id             INTEGER NOT NULL,
+                username             TEXT NOT NULL,
+                obelisk_x            INTEGER NOT NULL,
+                obelisk_y            INTEGER NOT NULL,
+                obelisk_z            INTEGER NOT NULL,
+                bonus_percent        INTEGER NOT NULL,
+                granted_ts           INTEGER NOT NULL,
+                granted_world_hours  REAL NOT NULL,
+                expires_world_hours  REAL NOT NULL,
+                PRIMARY KEY (world, steam_id, username)
+            )""";
+
     private final Connection connection;
 
     public SurvivorSkillObeliskDatabase(String dbPath) throws SQLException {
@@ -234,20 +262,42 @@ public class SurvivorSkillObeliskDatabase implements AutoCloseable {
         addColumnIfMissing("death_learned_songs", "length", "REAL");
         addColumnIfMissing("death_learned_songs", "isaddon", "REAL");
         addColumnIfMissing("death_ambitions", "texture", "TEXT");
+        rebuildBlessingsWithoutWorld();
+    }
+
+    /**
+     * A {@code blessings} table from before the world column has rows whose timebase cannot be told
+     * apart per server, so it is dropped. Only pre-release databases have that shape.
+     */
+    private void rebuildBlessingsWithoutWorld() throws SQLException {
+        if (hasColumn("blessings", "world")) {
+            return;
+        }
+        try (Statement stmt = connection.createStatement()) {
+            stmt.execute("DROP TABLE blessings");
+            stmt.execute(CREATE_BLESSINGS);
+        }
     }
 
     private void addColumnIfMissing(String table, String column, String type) throws SQLException {
-        try (Statement stmt = connection.createStatement();
-                ResultSet rs = stmt.executeQuery("PRAGMA table_info(" + table + ")")) {
-            while (rs.next()) {
-                if (column.equalsIgnoreCase(rs.getString("name"))) {
-                    return;
-                }
-            }
+        if (hasColumn(table, column)) {
+            return;
         }
         try (Statement stmt = connection.createStatement()) {
             stmt.execute("ALTER TABLE " + table + " ADD COLUMN " + column + " " + type);
         }
+    }
+
+    private boolean hasColumn(String table, String column) throws SQLException {
+        try (Statement stmt = connection.createStatement();
+                ResultSet rs = stmt.executeQuery("PRAGMA table_info(" + table + ")")) {
+            while (rs.next()) {
+                if (column.equalsIgnoreCase(rs.getString("name"))) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     private void createTables() throws SQLException {
@@ -269,10 +319,13 @@ public class SurvivorSkillObeliskDatabase implements AutoCloseable {
             stmt.execute(CREATE_DEATH_AMBITIONS_INDEX);
             stmt.execute(CREATE_DEATH_HIDDEN_SKILLS);
             stmt.execute(CREATE_DEATH_HIDDEN_SKILLS_INDEX);
+            stmt.execute(CREATE_DEATH_INVENTIONS);
+            stmt.execute(CREATE_DEATH_INVENTIONS_INDEX);
             stmt.execute(CREATE_RECOVERIES);
             stmt.execute(CREATE_RECOVERY_SKILLS);
             stmt.execute(CREATE_CHARACTER_BASELINES);
             stmt.execute(CREATE_OBELISK_TYPES);
+            stmt.execute(CREATE_BLESSINGS);
         }
     }
 

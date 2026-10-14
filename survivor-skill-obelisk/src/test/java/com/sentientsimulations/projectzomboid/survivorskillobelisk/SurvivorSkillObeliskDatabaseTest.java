@@ -1,6 +1,7 @@
 package com.sentientsimulations.projectzomboid.survivorskillobelisk;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.File;
@@ -68,10 +69,138 @@ class SurvivorSkillObeliskDatabaseTest {
         assertTrue(tables.contains("death_ambitions"), "death_ambitions table should exist");
         assertTrue(
                 tables.contains("death_hidden_skills"), "death_hidden_skills table should exist");
+        assertTrue(tables.contains("death_inventions"), "death_inventions table should exist");
         assertTrue(tables.contains("recoveries"), "recoveries table should exist");
         assertTrue(tables.contains("recovery_skills"), "recovery_skills table should exist");
         assertTrue(
                 tables.contains("character_baselines"), "character_baselines table should exist");
+        assertTrue(tables.contains("obelisk_types"), "obelisk_types table should exist");
+        assertTrue(tables.contains("blessings"), "blessings table should exist");
+    }
+
+    @Test
+    void blessingMissingWhenNeverGranted() throws Exception {
+        assertNull(repo.findBlessing("main", 42L, "alice"));
+        assertTrue(repo.listActiveBlessings("main", 0.0).isEmpty());
+    }
+
+    @Test
+    void blessingUpsertRoundTripsAndRefreshesExpiry() throws Exception {
+        repo.upsertBlessing(
+                new SurvivorSkillObeliskRepository.BlessingRow(
+                        "main", 42L, "alice", 10, 20, 0, 50, 1000L, 100.0, 124.0));
+        SurvivorSkillObeliskRepository.BlessingRow row = repo.findBlessing("main", 42L, "alice");
+        assertEquals(10, row.obeliskX());
+        assertEquals(20, row.obeliskY());
+        assertEquals(0, row.obeliskZ());
+        assertEquals(50, row.bonusPercent());
+        assertEquals(100.0, row.grantedWorldHours(), 1e-9);
+        assertEquals(124.0, row.expiresWorldHours(), 1e-9);
+
+        repo.upsertBlessing(
+                new SurvivorSkillObeliskRepository.BlessingRow(
+                        "main", 42L, "alice", 11, 21, 1, 75, 2000L, 110.0, 134.0));
+        row = repo.findBlessing("main", 42L, "alice");
+        assertEquals(11, row.obeliskX());
+        assertEquals(75, row.bonusPercent());
+        assertEquals(134.0, row.expiresWorldHours(), 1e-9);
+        assertEquals(
+                1, repo.listActiveBlessings("main", 0.0).size(), "re-granting keeps a single row");
+    }
+
+    @Test
+    void blessingRowsAreKeyedPerCharacterOfTheSameAccount() throws Exception {
+        repo.upsertBlessing(
+                new SurvivorSkillObeliskRepository.BlessingRow(
+                        "main", 42L, "alice", 0, 0, 0, 50, 1L, 0.0, 24.0));
+        repo.upsertBlessing(
+                new SurvivorSkillObeliskRepository.BlessingRow(
+                        "main", 42L, "alice2", 0, 0, 0, 50, 1L, 0.0, 24.0));
+        assertEquals(2, repo.listActiveBlessings("main", 0.0).size());
+        assertEquals(24.0, repo.findBlessing("main", 42L, "alice2").expiresWorldHours(), 1e-9);
+    }
+
+    @Test
+    void listActiveBlessingsExcludesExpiredAndDeleteExpiredDropsThem() throws Exception {
+        repo.upsertBlessing(
+                new SurvivorSkillObeliskRepository.BlessingRow(
+                        "main", 1L, "fresh", 0, 0, 0, 50, 1L, 0.0, 30.0));
+        repo.upsertBlessing(
+                new SurvivorSkillObeliskRepository.BlessingRow(
+                        "main", 2L, "stale", 0, 0, 0, 50, 1L, 0.0, 10.0));
+        repo.upsertBlessing(
+                new SurvivorSkillObeliskRepository.BlessingRow(
+                        "main", 3L, "edge", 0, 0, 0, 50, 1L, 0.0, 20.0));
+
+        List<SurvivorSkillObeliskRepository.BlessingRow> active =
+                repo.listActiveBlessings("main", 20.0);
+        assertEquals(1, active.size(), "expiry exactly at now counts as expired");
+        assertEquals("fresh", active.get(0).username());
+
+        assertEquals(2, repo.deleteExpiredBlessings("main", 20.0));
+        assertNull(repo.findBlessing("main", 2L, "stale"));
+        assertNull(repo.findBlessing("main", 3L, "edge"));
+        assertEquals(30.0, repo.findBlessing("main", 1L, "fresh").expiresWorldHours(), 1e-9);
+    }
+
+    @Test
+    void blessingRowsAreScopedPerWorld() throws Exception {
+        repo.upsertBlessing(
+                new SurvivorSkillObeliskRepository.BlessingRow(
+                        "main", 42L, "alice", 0, 0, 0, 50, 1L, 500.0, 524.0));
+        repo.upsertBlessing(
+                new SurvivorSkillObeliskRepository.BlessingRow(
+                        "deathmatch", 42L, "alice", 0, 0, 0, 50, 1L, 2.0, 26.0));
+
+        assertEquals(524.0, repo.findBlessing("main", 42L, "alice").expiresWorldHours(), 1e-9);
+        assertEquals(26.0, repo.findBlessing("deathmatch", 42L, "alice").expiresWorldHours(), 1e-9);
+        assertEquals(1, repo.listActiveBlessings("main", 500.0).size());
+        assertEquals(1, repo.listActiveBlessings("deathmatch", 2.0).size());
+        assertNull(repo.findBlessing("other", 42L, "alice"));
+
+        assertEquals(0, repo.deleteExpiredBlessings("main", 30.0), "main's row is still ahead");
+        assertEquals(1, repo.deleteExpiredBlessings("deathmatch", 30.0));
+        assertNull(repo.findBlessing("deathmatch", 42L, "alice"));
+        assertEquals(524.0, repo.findBlessing("main", 42L, "alice").expiresWorldHours(), 1e-9);
+
+        repo.deleteBlessing("deathmatch", 42L, "alice");
+        assertEquals(524.0, repo.findBlessing("main", 42L, "alice").expiresWorldHours(), 1e-9);
+    }
+
+    @Test
+    void aBlessingsTableWithoutAWorldColumnIsRebuilt() throws Exception {
+        db.close();
+        String path = new File(tempDir, "old.db").getAbsolutePath();
+        try (java.sql.Connection old = java.sql.DriverManager.getConnection("jdbc:sqlite:" + path);
+                Statement stmt = old.createStatement()) {
+            stmt.execute(
+                    "CREATE TABLE blessings (steam_id INTEGER NOT NULL, username TEXT NOT NULL,"
+                            + " obelisk_x INTEGER NOT NULL, obelisk_y INTEGER NOT NULL,"
+                            + " obelisk_z INTEGER NOT NULL, bonus_percent INTEGER NOT NULL,"
+                            + " granted_ts INTEGER NOT NULL, granted_world_hours REAL NOT NULL,"
+                            + " expires_world_hours REAL NOT NULL,"
+                            + " PRIMARY KEY (steam_id, username))");
+            stmt.execute("INSERT INTO blessings VALUES (1, 'a', 0, 0, 0, 50, 1, 0.0, 24.0)");
+        }
+
+        db = new SurvivorSkillObeliskDatabase(path);
+        repo = new SurvivorSkillObeliskRepository(db.getConnection());
+
+        assertTrue(repo.listActiveBlessings("", 0.0).isEmpty(), "pre-release rows are dropped");
+        repo.upsertBlessing(
+                new SurvivorSkillObeliskRepository.BlessingRow(
+                        "main", 1L, "a", 0, 0, 0, 50, 1L, 0.0, 24.0));
+        assertEquals(24.0, repo.findBlessing("main", 1L, "a").expiresWorldHours(), 1e-9);
+    }
+
+    @Test
+    void deleteBlessingIsIdempotent() throws Exception {
+        repo.deleteBlessing("main", 7L, "nobody");
+        repo.upsertBlessing(
+                new SurvivorSkillObeliskRepository.BlessingRow(
+                        "main", 7L, "bob", 0, 0, 0, 50, 1L, 0.0, 24.0));
+        repo.deleteBlessing("main", 7L, "bob");
+        assertNull(repo.findBlessing("main", 7L, "bob"));
     }
 
     @Test
@@ -175,6 +304,32 @@ class SurvivorSkillObeliskDatabaseTest {
 
         assertEquals(0f, repo.findCharacterBaseline(42L, "alice").get("Strength"));
         assertEquals(3000f, repo.findCharacterBaseline(43L, "bob").get("Strength"));
+    }
+
+    @Test
+    void newCharacterClearsRecoveryLedger() throws Exception {
+        // A death that never reached OnPlayerDeath leaves the dead character's ledger behind.
+        repo.replaceRecovery(42L, "alice", 7L, 1_000L, Map.of("Cooking", 3000f));
+        repo.replaceRecovery(43L, "bob", 8L, 1_500L, Map.of("Aiming", 100f));
+
+        CharacterBaselineHandler.recordNewCharacter(
+                repo, 42L, "alice", Map.of("Strength", 11250f), true);
+
+        assertTrue(repo.findRecoveryGrants(42L, "alice").isEmpty());
+        assertEquals(100f, repo.findRecoveryGrants(43L, "bob").get("Aiming"));
+        assertEquals(11250f, repo.findCharacterBaseline(42L, "alice").get("Strength"));
+    }
+
+    @Test
+    void newCharacterKeepsRecoveryLedgerWhereDeathsAreNotRecorded() throws Exception {
+        // A server that shares another server's database must not clear that server's ledger.
+        repo.replaceRecovery(42L, "alice", 7L, 1_000L, Map.of("Cooking", 3000f));
+
+        CharacterBaselineHandler.recordNewCharacter(
+                repo, 42L, "alice", Map.of("Strength", 11250f), false);
+
+        assertEquals(3000f, repo.findRecoveryGrants(42L, "alice").get("Cooking"));
+        assertEquals(11250f, repo.findCharacterBaseline(42L, "alice").get("Strength"));
     }
 
     @Test
@@ -482,6 +637,28 @@ class SurvivorSkillObeliskDatabaseTest {
             assertTrue(rs.next());
             return rs.getInt("c");
         }
+    }
+
+    @Test
+    void insertInventionsRoundTripThroughRepo() throws Exception {
+        long deathId =
+                repo.insertDeath(6_000L, "finn", 14L, "Finn", "Oduya", 30.0, 40, 0.0f, 0.0f, 0.0f);
+        String json =
+                "{\"NeuralHat\":{\"improvementData\":{\"efficiency\":[2,9]}},\"specialMax\":2}";
+
+        repo.insertInventions(deathId, json);
+
+        assertEquals(1, countChildren("death_inventions", deathId));
+        assertEquals(json, repo.findInventionsByDeath(deathId));
+    }
+
+    @Test
+    void findInventionsByDeathIsNullWhenNothingRecorded() throws Exception {
+        long deathId =
+                repo.insertDeath(6_001L, "finn", 14L, "Finn", "Oduya", 31.0, 41, 0.0f, 0.0f, 0.0f);
+
+        assertNull(repo.findInventionsByDeath(deathId));
+        assertEquals(0, countChildren("death_inventions", deathId));
     }
 
     private int countChildren(String table, long deathId) throws Exception {

@@ -269,13 +269,18 @@ AVCS.OnServerCommand = function(moduleName, command, arg)
     if command == "fullSyncSnapshotV3" then
         AVCS.Sync.receiveSnapshot(arg)
     elseif command == "fullSyncVehicleDBV2" then
-        Sync.receive("vehicle", arg.data, arg.requestId)
+        if type(arg) == "table" then
+            Sync.receive("vehicle", arg.data, arg.requestId)
+        end
     elseif command == "fullSyncPlayerDBV2" then
-        Sync.receive("player", arg.data, arg.requestId)
+        if type(arg) == "table" then
+            Sync.receive("player", arg.data, arg.requestId)
+        end
+    -- Legacy empty tables arrive as nil. Keep the PR's atomic cache publication.
     elseif command == "fullSyncVehicleDB" then
-        Sync.receive("vehicle", arg)
+        Sync.receive("vehicle", arg or {})
     elseif command == "fullSyncPlayerDB" then
-        Sync.receive("player", arg)
+        Sync.receive("player", arg or {})
     elseif command == "updateClientClaimVehicle" then
         AVCS.updateClientClaimVehicle(arg)
     elseif command == "updateClientUnclaimVehicle" then

@@ -12,6 +12,7 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import se.krka.kahlua.vm.KahluaTable;
 import se.krka.kahlua.vm.KahluaTableIterator;
+import zombie.Lua.LuaManager;
 import zombie.ZomboidFileSystem;
 import zombie.characters.IsoPlayer;
 import zombie.characters.professions.CharacterProfessionDefinition;
@@ -30,7 +31,8 @@ import zombie.scripting.objects.CharacterTrait;
  *
  * <p>Captured per death: identity + perk levels/XP, known recipes, read literature (titles), read
  * print media, watched recorded media (VHS tapes / CDs), and — if the Lifestyles mod is installed —
- * learned instrument songs, ambition progress, and hidden-skill progress (Yoga, Inventing).
+ * learned instrument songs, ambition progress, hidden-skill progress (Yoga, Inventing, PingPong),
+ * and invention research.
  *
  * <p>Same two-thread split as {@link ListDeathsHandler}: the main thread snapshots all per-player
  * state (IsoPlayer, ZomboidRadio, and Kahlua mod-data tables are not thread-safe) into plain Java
@@ -119,7 +121,8 @@ public final class DeathEventHandler {
             List<WatchedMediaSnapshot> watchedMedia,
             List<LearnedSongSnapshot> learnedSongs,
             List<AmbitionSnapshot> ambitions,
-            List<HiddenSkillSnapshot> hiddenSkills) {}
+            List<HiddenSkillSnapshot> hiddenSkills,
+            String inventionsJson) {}
 
     /**
      * Shared single-thread write queue for death snapshots and character baselines. FIFO order is
@@ -149,11 +152,32 @@ public final class DeathEventHandler {
         DB_WORK.offer(task);
     }
 
+    /**
+     * {@code -DSurvivorSkillObelisk.recordDeaths=false} keeps deaths out of the database. A PvP
+     * raid instance sets it because it shares the main server's database and the main server
+     * records every raid death itself.
+     */
+    public static final String PROP_RECORD_DEATHS = "SurvivorSkillObelisk.recordDeaths";
+
+    private static final boolean RECORD_DEATHS =
+            !"false".equalsIgnoreCase(System.getProperty(PROP_RECORD_DEATHS));
+
+    public static boolean recordsDeaths() {
+        return RECORD_DEATHS;
+    }
+
     public static void onPlayerDeath(IsoPlayer player) {
         try {
             // Invalidate any recovery mid-pipeline for this player before the snapshot is queued —
             // its XP apply / ledger write must not land for the respawned character.
             RecoverSkillsHandler.notifyDeath(player.getSteamID(), player.getUsername());
+            if (!RECORD_DEATHS) {
+                LOGGER.info(
+                        "[SurvivorSkillObelisk] death of {} not recorded here ({}=false)",
+                        player.getUsername(),
+                        PROP_RECORD_DEATHS);
+                return;
+            }
             DeathSnapshot snapshot = snapshot(player);
             submitDbWrite(
                     () -> {
@@ -195,7 +219,8 @@ public final class DeathEventHandler {
                 snapshotWatchedMedia(player),
                 snapshotLearnedSongs(player),
                 snapshotAmbitions(player),
-                snapshotHiddenSkills(player));
+                snapshotHiddenSkills(player),
+                snapshotInventions(player));
     }
 
     private static void workerLoop() {
@@ -303,6 +328,9 @@ public final class DeathEventHandler {
             }
             for (HiddenSkillSnapshot h : s.hiddenSkills()) {
                 repo.insertHiddenSkill(deathId, h.skill(), h.level(), h.xp(), h.xpForNextLevel());
+            }
+            if (s.inventionsJson() != null) {
+                repo.insertInventions(deathId, s.inventionsJson());
             }
         }
     }
@@ -590,11 +618,11 @@ public final class DeathEventHandler {
     }
 
     /**
-     * Lifestyles-mod hidden skills (Yoga, Inventing). Stored on {@code
+     * Lifestyles-mod hidden skills (Yoga, Inventing, PingPong). Stored on {@code
      * player:getModData().LSHiddenSkills} as a map keyed by skill name → Lua array of {@code
      * {level, xp, xpForNextLevel}} (see Lifestyles' HSMng.lua). Iterates whatever keys are present
-     * rather than allowlisting the two known names so hidden skills Lifestyles adds later are
-     * captured without a code change. No-op if Lifestyles isn't installed (key absent).
+     * rather than allowlisting the known names so hidden skills Lifestyles adds later are captured
+     * without a code change. No-op if Lifestyles isn't installed (key absent).
      */
     private static List<HiddenSkillSnapshot> snapshotHiddenSkills(IsoPlayer player) {
         List<HiddenSkillSnapshot> result = new ArrayList<>();
@@ -625,6 +653,26 @@ public final class DeathEventHandler {
                             xpForNextLevel == null ? 0.0 : xpForNextLevel));
         }
         return result;
+    }
+
+    /**
+     * Lifestyles-mod invention research: the whole {@code player:getModData().invData} table (see
+     * {@link InventionsData}). Entries nest several levels deep and are copied verbatim by
+     * Lifestyles from its definition tables, so instead of flattening into columns the table is
+     * stored as one JSON document with its transient workbench state stripped. Null if Lifestyles
+     * isn't installed or the character never researched anything.
+     */
+    private static String snapshotInventions(IsoPlayer player) {
+        KahluaTable modData = player.getModData();
+        if (modData == null
+                || !(modData.rawget(InventionsData.MOD_DATA_KEY) instanceof KahluaTable invData)) {
+            return null;
+        }
+        KahluaTable stripped = InventionsData.copy(invData, LuaManager.platform::newTable, true);
+        if (stripped == null || !InventionsData.hasProgress(stripped)) {
+            return null;
+        }
+        return LuaTableJson.encode(stripped);
     }
 
     /**
