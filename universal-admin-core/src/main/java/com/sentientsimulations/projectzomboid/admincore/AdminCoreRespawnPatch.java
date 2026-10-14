@@ -156,13 +156,22 @@ public final class AdminCoreRespawnPatch extends StormClassTransformer {
                 int opcode, String owner, String name, String descriptor, boolean isInterface) {
             boolean connectionLoad =
                     mode == Mode.CONNECT
-                            && owner.equals("zombie/savefile/ServerPlayerDB")
-                            && name.equals("serverLoadNetworkCharacter")
-                            && descriptor.equals(
-                                    "(ILjava/lang/String;)Lzombie/characters/IsoPlayer;");
+                            && !isInterface
+                            && (opcode == Opcodes.INVOKEVIRTUAL
+                                            && owner.equals("zombie/savefile/ServerPlayerDB")
+                                            && name.equals("serverLoadNetworkCharacter")
+                                            && descriptor.equals(
+                                                    "(ILjava/lang/String;)Lzombie/characters/IsoPlayer;")
+                                    || opcode == Opcodes.INVOKESTATIC
+                                            && owner.equals(
+                                                    "com/sentientsimulations/projectzomboid/securitypatches/patch/PienZInvisibilityProbePatch")
+                                            && name.equals("loadAndProbe")
+                                            && descriptor.equals(
+                                                    "(Lzombie/savefile/ServerPlayerDB;ILjava/lang/String;)Lzombie/characters/IsoPlayer;"));
             if (connectionLoad) {
                 // Copy the actual int/String call arguments. Other Storm advice can move native
-                // local variables, so no local slot number is read by this guard.
+                // local variables, so no local slot number is read by this guard. The anti-cheat
+                // wrapper keeps the same receiver/int/String stack, regardless of patch order.
                 super.visitInsn(Opcodes.DUP2);
                 invoke("AdminCoreRespawnServer", "captureLoad", "(ILjava/lang/String;)V");
             }
