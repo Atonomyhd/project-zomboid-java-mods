@@ -28,5 +28,41 @@
     "before": "2039ee926e32b59ed71d365ce0bd1e2e13541a45433a7721b6516e0724ed8312",
     "after": "a11f0d4a1a73da01924531a80825e77da39be0a141a6cd81752fc032d8dafd4d",
     "module": "true-music-radio"
+  },
+  {
+    "path": "mod-LifestyleHobbies/common/media/lua/shared/TimedActions/hooks/FixActions.lua",
+    "before": "b41b2335a043d8713db4949a4cf01db8e6ae6eedc85d09a4b0980c140a192f7e",
+    "after": "3515b7dfefd4de5106bb2a89a7741f75bbad7a167aaaf7027099c26c4a578676",
+    "module": "lifestyle"
+  },
+  {
+    "path": "mod-LifestyleHobbies/common/media/lua/client/Hygiene/BathTubFunctions.lua",
+    "before": "00972f52aee6c9c94c990a430a7b26a6297f18c1a85478b982d56af6f686a631",
+    "after": "17f209c922b058126bdb647b9d9ba82a0242dc868718e4f851e60ef579ec0c70",
+    "module": "lifestyle"
+  },
+  {
+    "path": "mod-LifestyleHobbies/common/media/lua/client/Hygiene/ToiletContextMenu.lua",
+    "before": "e4d2f59604f4c895edb6978a3a2648129206276bfde405d2d6e3c3f301025a76",
+    "after": "bcf989c238c1a73e28a803ecc042a752b4f90e76c8ae9c6badacdb4483ccf73c",
+    "module": "lifestyle"
+  },
+  {
+    "path": "mod-LifestyleHobbies/common/media/lua/shared/TimedActions/LSCheckYourselfAP.lua",
+    "before": "a15a5d7185f325c20d6fd11aa90a50c53486049b49adb31fa39dcc8259f1d3da",
+    "after": "a75b033231f80410c615270b6c5fbd938ad986775a01b3d085ec6ded58f57c52",
+    "module": "lifestyle"
+  },
+  {
+    "path": "mod-LifestyleHobbies/common/media/lua/client/ISUI/hooks/InvPane.lua",
+    "before": "9c6695a1f993abb9c07eaafb6cee8b8074ad484098f27295b02d5cd971c0a7ca",
+    "after": "9139927adf026d65605dbc4be8d373533ed5fd2a035a8c31936347c6e600fe22",
+    "module": "lifestyle"
+  },
+  {
+    "path": "mod-LifestyleHobbies/common/media/lua/shared/TimedActions/hooks/Read.lua",
+    "before": "8940b85612d66738a9f69284ddda90dae8b67086dd89ba02de9f62d14bd3e2b4",
+    "after": "e3cac6a19fb87f987b5c0e3c64ef442bcb17393b894e4daa2fb541b2a487dd0c",
+    "module": "lifestyle"
   }
 ]
