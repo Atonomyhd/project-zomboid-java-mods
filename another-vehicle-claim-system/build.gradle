@@ -104,6 +104,9 @@ tasks.named('luaTest') {
 			"${ui}/AVCSWindowSizing.lua"
 		]
 	]
+	def damnRoot = providers.gradleProperty('damnModDir')
+			.orElse(providers.environmentVariable('DAMN_MOD_ROOT')).orNull
+	scriptArguments['DamnIdentityGuardTest.lua'] = [projectDir.absolutePath] + (damnRoot ? [damnRoot] : [])
 }
 
 // Compilation accepts mojibake. Check the source and the exact generated release text too.
