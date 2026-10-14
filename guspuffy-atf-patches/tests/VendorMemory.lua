@@ -52,7 +52,11 @@ end
 check(squareReads==14641,"Budgeted startup visits the complete original 121x121 area")
 local before=squareReads; fire("OnTick"); check(squareReads==before,"Finished startup scan stops doing work")
 -- Actual radio source: nil player and lost deviceData must not dereference.
-require=function() end
+local radioRequires={}
+require=function(name)
+    assert(name~="TMRSound","Bare sound-helper path must not rely on automatic loading")
+    radioRequires[name]=true
+end
 getActivatedMods=function() return {contains=function() return false end,size=function() return 0 end} end
 DevicePresets={class="presets"}
 __classmetatables={presets={__index={addPreset=function() end}}}
@@ -61,6 +65,7 @@ PZAPI={ModOptions={create=function() return {addTickBox=function() end,addSlider
 MapObjects={OnLoadWithSprite=function() end}
 getPlayer=function() return nil end
 dofile(root.."mod-TrueMusicRadio42/42.20/media/lua/client/TrueMusicRadio/TMRadio.lua")
+check(radioRequires["TrueMusicRadio/TMRSound"],"Radio loads its sound helper through the actual module path")
 check(pcall(TMRadio.adjustSounds),"Radio nil-player guard precedes coordinate access")
 getPlayer=function() return player end
 getCore=function() return {getOptionMusicVolume=function() return 5 end} end

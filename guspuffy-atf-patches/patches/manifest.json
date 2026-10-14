@@ -26,7 +26,7 @@
   {
     "path": "mod-TrueMusicRadio42/42.20/media/lua/client/TrueMusicRadio/TMRadio.lua",
     "before": "2039ee926e32b59ed71d365ce0bd1e2e13541a45433a7721b6516e0724ed8312",
-    "after": "64e4f739f3357fd4a33205f95f5b0d761c0d1bd9f64e6f85f4f13bee47600029",
+    "after": "a11f0d4a1a73da01924531a80825e77da39be0a141a6cd81752fc032d8dafd4d",
     "module": "true-music-radio"
   }
 ]

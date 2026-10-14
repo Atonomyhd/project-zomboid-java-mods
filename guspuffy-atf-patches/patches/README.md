@@ -36,6 +36,8 @@ Changes:
   Fragment merging across batch boundaries may display adjacent stack fragments separately.
 - True Music Radio guards missing players and device data and stops/removes stale sounds
   without dereferencing missing parents. The existing `whereAreYou` fix remains in place.
+  Its sound helper uses `TrueMusicRadio/TMRSound`, so initialization no longer relies on
+  automatic file loading after a failed bare-name require.
 
 The native crash reports showed exhausted system commit capacity. These bounded workloads
 and caches are concrete repairs; they do not identify or claim to fix the entire process's

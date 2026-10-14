@@ -1,5 +1,11 @@
 --- a/mod-TrueMusicRadio42/42.20/media/lua/client/TrueMusicRadio/TMRadio.lua
 +++ b/mod-TrueMusicRadio42/42.20/media/lua/client/TrueMusicRadio/TMRadio.lua
+@@ -1,4 +1,4 @@
+ require "TCMusicDefenitions"
+-require "TMRSound"
++require "TrueMusicRadio/TMRSound"
+
+ TMRadio = {}
 @@ -1431,6 +1431,7 @@
  
  function TMRadio.adjustSounds()
