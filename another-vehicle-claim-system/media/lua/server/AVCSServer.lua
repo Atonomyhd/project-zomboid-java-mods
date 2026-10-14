@@ -49,14 +49,50 @@ ModData AVCSByPlayerID is stored like this
 and so on
 --]]
 
+local function canReachClaim(playerObj, vehicleObj)
+    if playerObj:isDead() or vehicleObj:isRemovedFromWorld() then
+        return false
+    end
+    if isServer() then
+        local players = getOnlinePlayers()
+        if not players then
+            return false
+        end
+        local connected = false
+        for i = 0, players:size() - 1 do
+            if players:get(i) == playerObj then
+                connected = true
+                break
+            end
+        end
+        if not connected then
+            return false
+        end
+    elseif getSpecificPlayer(playerObj:getPlayerNum()) ~= playerObj then
+        return false
+    end
+    local playerSquare, vehicleSquare = playerObj:getSquare(), vehicleObj:getSquare()
+    if not playerSquare or not vehicleSquare or playerSquare:getZ() ~= vehicleSquare:getZ() then
+        return false
+    end
+    -- Match the adjacent position accepted by vanilla luautils.walkAdj.
+    return math.abs(vehicleSquare:getX() + 0.5 - playerObj:getX()) <= 1.6
+        and math.abs(vehicleSquare:getY() + 0.5 - playerObj:getY()) <= 1.6
+        and playerSquare:canReachTo(vehicleSquare)
+end
+
 -- vehicleID is vehicle object ID
 ---@param playerObj IsoPlayer
 function AVCS.claimVehicle(playerObj, vehicleID)
-    if not playerObj or type(vehicleID) ~= "table" or type(vehicleID.vehicle) ~= "number" then
+    if not playerObj or type(vehicleID) ~= "table" then
         return
     end
-    local vehicleObj = getVehicleById(vehicleID.vehicle)
-    if not vehicleObj then
+    local id = vehicleID.vehicle
+    if type(id) ~= "number" or id ~= id or id < 0 or id > 32767 or id ~= math.floor(id) then
+        return
+    end
+    local vehicleObj = getVehicleById(id)
+    if not vehicleObj or not canReachClaim(playerObj, vehicleObj) then
         return
     end
     vehicleID = AVCS.getVehicleID(vehicleObj)
