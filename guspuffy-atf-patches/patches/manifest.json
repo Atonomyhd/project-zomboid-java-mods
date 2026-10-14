@@ -64,5 +64,119 @@
     "before": "8940b85612d66738a9f69284ddda90dae8b67086dd89ba02de9f62d14bd3e2b4",
     "after": "e3cac6a19fb87f987b5c0e3c64ef442bcb17393b894e4daa2fb541b2a487dd0c",
     "module": "lifestyle"
+  },
+  {
+    "path": "mod-LifestyleHobbies/common/media/lua/client/Inventions/NeuralHat.lua",
+    "before": "82bf68a30dd699ad82b5b878f52a00b973f9701b11708b1fb03a10a452f2472e",
+    "after": "2aae1e0cab9bda68b41d916b4aee0a471232f32a057d5dc538b1157733280651",
+    "module": "lifestyle"
+  },
+  {
+    "path": "mod-LifestyleHobbies/common/media/lua/client/ISMeditation/Mindfulness.lua",
+    "before": "dd3798faeea58e67093deb21276aa7f995a5b15982cb50c848ab956afc8c2952",
+    "after": "65054890f61104bf6435fc96a139a5ff1577e00a0ff6ae375a208765f9d7eaf6",
+    "module": "lifestyle"
+  },
+  {
+    "path": "mod-LifestyleHobbies/common/media/lua/client/ISAmbt/LSTerminator.lua",
+    "before": "5389eb67f4474ae79f9723376cd379a14da9565f1ee9cd23dec13a53faf31a94",
+    "after": "55b34d66e18384e359af2dd05382cc8f00be25669ec6bca62d3e0d812408abb0",
+    "module": "lifestyle"
+  },
+  {
+    "path": "mod-LifestyleHobbies/common/media/lua/shared/LSUtil.lua",
+    "before": "4e6b73720eefcafd828773067327664aa854228a6080705cf948c9cecc149ddb",
+    "after": "9461ab27ec8e6d49f7ecedd50556a8be2b3b715255abdd3de0309f64d0c45b75",
+    "module": "lifestyle"
+  },
+  {
+    "path": "mod-LifestyleHobbies/common/media/lua/shared/TimedActions/LSMeditateAction.lua",
+    "before": "a0aea45b7d13286ad5efeff9f215fd5280d4d9fc799cdcb6929688ebb323a610",
+    "after": "ddbd4c0e0d8fed37981200d73a5148a88c9ea40e6eadc9352c66f883c038465f",
+    "module": "lifestyle"
+  },
+  {
+    "path": "mod-LifestyleHobbies/common/media/lua/shared/TimedActions/PlayInstrumentTraining.lua",
+    "before": "835dc53b2f5a8807c9b77d6e5edc39f4611a063ddac43e7dfacaa2e0e53f604a",
+    "after": "322a92abdf94167eea07ce04879d449d99ed10e5609a0c14a7d66937158d6069",
+    "module": "lifestyle"
+  },
+  {
+    "path": "mod-LifestyleHobbies/common/media/lua/shared/TimedActions/PlayInstrumentActionNew.lua",
+    "before": "529d944ce7f7dd18d1512b2eca31e542820856a9d3095c8fb8e54720eedbaaf3",
+    "after": "30dfb07f47cd2eb5ede1012f4a760da08264e85902ccdb7f656d8d27e5772f52",
+    "module": "lifestyle"
+  },
+  {
+    "path": "mod-LifestyleHobbies/common/media/lua/shared/TimedActions/PlayInstrumentVocal.lua",
+    "before": "33f628fa94fe7522a6925f1a4a47c999c32c09cec176f0de5e1a2a39b07f6a38",
+    "after": "9953784be09b087cd6bbf09189a49814205e835b6ee198d46396c44e30e270bd",
+    "module": "lifestyle"
+  },
+  {
+    "path": "mod-LifestyleHobbies/common/media/lua/shared/TimedActions/PlayDJBoothAction.lua",
+    "before": "6a8d3dd5767260e67ea96353a197ce577a3a023ccc7e2fd56151a2a8f55e7dac",
+    "after": "b0e4305093cca8396e395fdb991dedab6f0c3dc3c812e22ccc942584e23f4fe4",
+    "module": "lifestyle"
+  },
+  {
+    "path": "mod-LifestyleHobbies/common/media/lua/shared/TimedActions/PlayerIsDancingToMusic.lua",
+    "before": "6cdd500807d05edbf4d9e2f4c8c2036920d858c2d7887a477c6fb337e48e845c",
+    "after": "cd65514ae2f3f20f807346069ba6d42702b2438fc01f31959f6eeffbd334d83c",
+    "module": "lifestyle"
+  },
+  {
+    "path": "mod-LifestyleHobbies/common/media/lua/shared/TimedActions/LSCanvasPaintingAction.lua",
+    "before": "e79e7faf4523849380d2570cab16f8606424d11f5a61dff9523cd609f949fd67",
+    "after": "a30cc4b6a4e13a571aa002a6d3e4189b93de2651033f2971243fe728b6ba0f03",
+    "module": "lifestyle"
+  },
+  {
+    "path": "mod-LifestyleHobbies/common/media/lua/shared/TimedActions/LSSculptingAction.lua",
+    "before": "3a70b6ffd14b9a593e4e403eafbbcb0280d2519902027439f9ef4c0252a88f06",
+    "after": "614864b4ab459245b603a04685aedc625f7c720d2de694c5b3efbd1b931196ce",
+    "module": "lifestyle"
+  },
+  {
+    "path": "mod-LifestyleHobbies/common/media/lua/shared/TimedActions/CleanRoomAction.lua",
+    "before": "ee0c6a8207cb6c013f4d2bafbc81942dfcb51c902480a96143aa770105df8bf3",
+    "after": "5fc5ef62f755f3441efbac69353ccb657d1a541e21c00001497195cc80eef4be",
+    "module": "lifestyle"
+  },
+  {
+    "path": "mod-LifestyleHobbies/common/media/lua/shared/TimedActions/LSUnclogToilet.lua",
+    "before": "a3e6261cb6076e4855ea136bde19dd3b7b67c0e737e30bca4059e6d1a168e4aa",
+    "after": "59777f76f1b8d73ed67453219de6fec9bc9b89a955d21452e0e9ab8df0da0de8",
+    "module": "lifestyle"
+  },
+  {
+    "path": "mod-LifestyleHobbies/common/media/lua/shared/TimedActions/LSFixAction.lua",
+    "before": "0f0edbbe864894d7f4d6148ed092e0c3072cb4bd573577c6d55805edda24d389",
+    "after": "6a1beb174858a8f4a4a83de1384e3492a710f1d930063bbc21e292ae336e39a4",
+    "module": "lifestyle"
+  },
+  {
+    "path": "mod-LifestyleHobbies/common/media/lua/shared/TimedActions/LSCleanObject.lua",
+    "before": "083eae3d650b47d7bc90e0556d419aa81d5dd0cf4cdb4d8338c8577901f2200d",
+    "after": "bc71a4e5d74e693ef625310700b20b5e9360038a1e02ad879a246f2e65bd3fc6",
+    "module": "lifestyle"
+  },
+  {
+    "path": "mod-LifestyleHobbies/common/media/lua/shared/TimedActions/LSYogaAction.lua",
+    "before": "00430eadeba1d79ee592697de1a6ccec3de1e9f5b6f5a3de423d3fe410102e32",
+    "after": "90e6bd0e4279c842f5b554004a72d81b60e1a5263017f544f0e49fab355e95ae",
+    "module": "lifestyle"
+  },
+  {
+    "path": "mod-LifestyleHobbies/common/media/lua/server/LSservercommands.lua",
+    "before": "fa33de3b2136a068070e690d0ebabc81126740b80b4bf0977d6f536d24a0afc0",
+    "after": "0e9a868d127858af029c39320841d43ec1745f37aae8c7578d241bd230c9a542",
+    "module": "lifestyle"
+  },
+  {
+    "path": "mod-LifestyleHobbies/common/media/lua/client/Properties/Player/AdminTestCM.lua",
+    "before": "d0ba5267a1636ed682fd1937892458b5ee1f1a9328ef1690ad00e49467a136dd",
+    "after": "e15632d5adf9548d5969ddd5a00846bc5d287dfcfe343486fafd84b8fac31580",
+    "module": "lifestyle"
   }
 ]
