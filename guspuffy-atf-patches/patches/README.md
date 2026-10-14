@@ -31,8 +31,15 @@ Changes:
   Staff release, assignment, forced release, diagnostic dumps and alerts require the current
   `CanSetupSafehouses` capability. Owners can still request release of their own claim.
   Role names alone do not grant access; missing capability support denies staff operations.
-- Lifestyle spreads its 121x121 startup scan over callbacks with a 64-square budget, cancels
-  when the player leaves the area/floor or dies, and removes unloaded objects from its registry.
+- Lifestyle budgets its startup scan and removes unloaded references. Inventory names delegate
+  the native renderer, preserving Livestock overlays in either load order without an extra
+  full-inventory scan. Neural Hat reading supports the actual invention schema. Repair,
+  bathtub, toilet refill and mirror callbacks handle their inspected failure cases.
+- Lifestyle reward actions use server lifecycles, connection/actor provenance and existing
+  formulas. The paired module supplies reward helpers and native ownership validation.
+  Install all Lifestyle client/shared/server patches together. Saved legacy progress has
+  bounded fields; nonmigrated ambition, Inventing and object authority remains documented
+  in [the compatibility notes](../PERFORMANCE-FIXES.md).
 - Error Magnifier processes at most 32 new entries per callback, retains 256 unique errors,
   truncates retained entries at 16 KiB and refreshes its window at most four times per second.
   Old entries are evicted; full original logs remain the source for incident investigation.
@@ -40,7 +47,11 @@ Changes:
 - True Music Radio guards missing players and device data and stops/removes stale sounds
   without dereferencing missing parents. The existing `whereAreYou` fix remains in place.
   Its sound helper uses `TrueMusicRadio/TMRSound`, so initialization no longer relies on
-  automatic file loading after a failed bare-name require.
+  automatic file loading after a failed bare-name require. The terminal menu uses the same
+  explicit module path. Server-owned terminal stock/revisions prevent repeated ejection;
+  normal walks complete before requests. Staff-only stock reset preserves the original
+  additional-media feature. See the compatibility notes for migration/crash limits.
+- ATF automatic safehouse safety removes an unused require of the removed ISSafetyUI file.
 
 The native crash reports showed exhausted system commit capacity. These bounded workloads
 and caches are concrete repairs; they do not identify or claim to fix the entire process's

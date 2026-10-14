@@ -178,5 +178,23 @@
     "before": "d0ba5267a1636ed682fd1937892458b5ee1f1a9328ef1690ad00e49467a136dd",
     "after": "e15632d5adf9548d5969ddd5a00846bc5d287dfcfe343486fafd84b8fac31580",
     "module": "lifestyle"
+  },
+  {
+    "path": "mod-TrueMusicRadio42/42.20/media/lua/client/TrueMusicRadio/UseTerminalMenu.lua",
+    "before": "28a3a5c248cb6e7b5522a32185fe412611e4ea3bc58170dd57c24479da7d17cf",
+    "after": "fef9a8eb484409d7e4995af30ab12814934e60d633a4cfdca7331d25f089a4e4",
+    "module": "true-music-radio"
+  },
+  {
+    "path": "mod-TrueMusicRadio42/42.20/media/lua/server/TrueMusicRadio/TMRServer.lua",
+    "before": "17610decd25c3a81c7291edd51ff10ac1b40cd3c97adaa1498dc57fffdea9ddc",
+    "after": "b8fc3d5fd76ef9f4b5a0ac3040e5a12914389a0f8ab44756449227e316fca3a1",
+    "module": "true-music-radio"
+  },
+  {
+    "path": "mod-after_the_fall_core_b42/42.14/media/lua/client/ATF_SafetySystem/ATF_AutomaticSafehouseSafety.lua",
+    "before": "4cd3c53e9f5bfeb631c406d0d9534916530f150df8679b7a06a38c7acbd3e44e",
+    "after": "ef5ba70918689c368424ea4955e2f5157e0ffe4a3b2d54050a46f4bc709cd360",
+    "module": "atf-core"
   }
 ]

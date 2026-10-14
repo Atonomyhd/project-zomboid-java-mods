@@ -1,58 +1,35 @@
-# Performance and synchronization fixes
+# Compatibility fixes
 
-The client compatibility hooks activate with this module when their target mods are present:
+Client hooks bound Chunk List highlighting and safehouse HUD lookup, tolerate temporarily missing players and survive reload without duplicate callbacks. Native safehouse/chat synchronization uses the paired ATF Core patch. Talis global debug changes require the current SandboxOptions capability.
 
-- Chunk List keeps a full export selection but highlights only the nine neighboring chunks.
-  Keyed coordinate lookup replaces growing duplicate scans. Stop, export and cancellation
-  release transient data; a same-callback stop/export retains the complete selection.
-- ATF safehouse HUD uses a coarse spatial index with the original inclusive boundaries.
-  Giant claims use a fallback list instead of allocating unbounded index cells. Routine
-  rebuilds no longer print every safehouse. Safety checks still use current claim data.
-- Lifestyle and True Music Radio tick callbacks skip temporarily missing/dead players.
-  Hooks survive reload without duplicate registration and resume when the player returns.
+## Source integration
 
-The optional server Java helper completes native safehouse/chat synchronization after
-direct offline creation. It is called by the paired ATF Core source patch, validates that
-the native safehouse still exists, and does not add a client command or permission bypass.
+The [source patches](patches/README.md) repair ATF safehouse synchronization, Lifestyle rendering/actions/rewards, Error Magnifier retention and True Music Radio cleanup/ejection. They are not applied by installing this module alone. Integrate matching client/server files with the module and its native action helper. Original Workshop sources are not bundled or changed.
 
-## Source integration required
+The reward migration stays inactive without the paired server routes, preventing parallel rewards when the module is installed alone.
 
-The five Lua source diffs in [patches](patches/README.md) repair ATF safehouse identity,
-unchanged broadcasts and member/respawn reconciliation; budget Lifestyle's startup scan;
-bound Error Magnifier retention/work; and clean up invalid True Music Radio devices.
-They are actual code patches, but are **not auto-loaded by this module**. The target mods
-contain local functions and anonymous event callbacks that require source integration.
-Use the hash-checked patch applicator and distribute the matching client/server files.
-The original third-party sources are not included in this PR.
+Lifestyle XP is calculated from the existing formulas after a validated native action starts. The server checks the submitting connection, actor, current inputs and elapsed time. Cancellation closes the action; replay cannot repeat its final reward. Yoga poses are intents, not client XP amounts. One validated early pose can wait for its earned deadline; completion allows a bounded 30-unit timing grace. Neural Hat bonuses and Mindfulness/Terminator healing use server state. Staff XP diagnostics use a separate capability-checked command.
+
+Resource scans run at most every 250 ms between rewards, with fresh checks before grants and completion. Snapshots update only the intended local player and preserve unsaved legacy skills.
+
+Saved data uses a bounded schema. Yoga, Mindfulness, Neural Hat effects and Terminator progress are protected. Reviewed older Inventing/PingPong, other ambition and modifier fields, including lingering Dunce penalties, retain their client-owned behavior. This is not a complete Lifestyle authority migration: those legacy completion conditions, object metadata and native XP acceptance still have their existing trust boundaries. Server-approved custom invention overrides require a separate review; the hat validation covers the inspected stock definitions.
+
+Radio ejection requires an accessible adjacent terminal, an enabled powered channel, approved media and a server stock/revision match. A persistent reservation prevents replay after reconnect or reload. Migration seeds bounded historical terminal stock once; it cannot establish whether that old stock was legitimate. Replacement terminals require a staff reset. Inventory and world saves are not one crash-atomic transaction.
 
 ## Verification
 
-From the repository root, Lua 5.1 and `luac` on PATH:
+Use Lua 5.1 and luac on PATH, from the repository root:
 
 ```powershell
-powershell -NoProfile -File guspuffy-atf-patches/Verify-Lua.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File guspuffy-atf-patches/Verify-Lua.ps1
 ```
 
-For the source-patch regressions, supply a folder containing the five patched files in
-their manifest paths (the `mod-name/version/media/...` layout). Original files are not
-fixtures in this repository:
+For vendor checks, pass the patched manifest-layout folder and the original Lifestyle media/lua folder. Inventory composition can additionally use the native ISInventoryPane.lua and LivestockPanelPlusEggs.lua files. Talis checks take its original media/lua folder.
 
 ```powershell
-powershell -NoProfile -File guspuffy-atf-patches/Verify-Lua.ps1 -VendorFixtures 'path/to/patched/mods'
+powershell -NoProfile -ExecutionPolicy Bypass -File guspuffy-atf-patches/Verify-Lua.ps1 -VendorFixtures 'path/to/patched/mods' -LifestyleLuaSource 'path/to/Lifestyle/common/media/lua' -PZInventoryPane 'path/to/ISInventoryPane.lua' -LivestockEggHook 'path/to/LivestockPanelPlusEggs.lua' -TalisLuaSource 'path/to/Talis/42/media/lua'
 ```
 
-The same scripts were exercised with the installed B42.20.4 Kahlua engine using
-`tests/RunKahlua.java`, `-Dtest.root=<repository>` and the game as working directory.
-Java compilation and the existing module tests pass with Java 25 and the installed
-Storm 2.10.1 distribution. The upstream Maven 2.10.0 coordinate was unavailable locally;
-the local validation substitute is not a repository build change.
+The suites also run with PZ 42.21.0 Kahlua through tests/RunKahlua.java. Java tests include native parser weaving in both Storm transformer orders and JVM linkage without game initialization. Local validation uses JDK 25 and audited Storm 2.13.1 through an external init script; no dependency substitution is committed.
 
-These changes address specific repeated work and stale state. Native/process RAM growth
-has not been attributed to a component. No live server deployment, high-population
-performance measurement or general cure for disappearing entities is claimed. Test
-disconnect/reconnect, long travel, claim changes and radio removal before rollout.
-
-The October 14 follow-up also replaces ATF Core's nonempty role-name checks with
-`CanSetupSafehouses` for staff safehouse operations, dumps and alerts. Owner release stays
-available. The authority regression passes in Lua 5.1 and PZ 42.21.0 Kahlua, including
-ordinary/custom roles, missing role support and immediate permission loss.
+Live two-client actions, cancellation/reconnect, travel, claim updates, device removal and stock migration remain gameplay acceptance checks. No live deployment, FPS measurement or general cure for disappearing world objects is claimed.
